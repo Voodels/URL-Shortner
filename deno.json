@@ -1,0 +1,27 @@
+{
+  "tasks": {
+  "dev:backend": "deno run --watch --allow-net --allow-env --allow-read=.env --env-file=.env backend/server.ts",
+  "start:backend": "deno run --allow-net --allow-env --allow-read=.env --env-file=.env backend/server.ts",
+    "dev:frontend": "cd frontend && deno task dev",
+    "build:frontend": "cd frontend && deno task build",
+    "preview:frontend": "cd frontend && deno task preview"
+  },
+  "compilerOptions": {
+  "lib": ["deno.ns", "deno.window", "dom", "dom.iterable"],
+    "strict": true,
+    "jsx": "react-jsx"
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 80,
+    "indentWidth": 2,
+    "semiColons": true,
+    "singleQuote": false,
+    "proseWrap": "preserve"
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  }
+}

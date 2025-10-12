@@ -1,0 +1,144 @@
+# ============================================================================
+# Docker Compose - Development Environment
+# ============================================================================
+#
+# PURPOSE: Local development with MySQL database
+# USAGE: docker-compose up -d
+#
+# SERVICES:
+# - mysql: MySQL 8.0 database server
+# - adminer: Web-based database management UI
+#
+# NETWORKS:
+# - url-shortener-network: Internal network for service communication
+#
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # MySQL Database
+  # ==========================================================================
+  mysql:
+    image: mysql:8.0
+    container_name: urlshortener-mysql
+    restart: unless-stopped
+
+    # Environment variables for MySQL
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: url_shortener
+      MYSQL_USER: urluser
+      MYSQL_PASSWORD: urlpassword
+
+      # Performance tuning
+      MYSQL_INITDB_SKIP_TZINFO: 1
+
+    # Port mapping: host:container
+    ports:
+      - "3306:3306"
+
+    # Persist data in volume (survives container restart)
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Auto-run schema on first startup
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+
+    # Health check to ensure MySQL is ready
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    # Network
+    networks:
+      - url-shortener-network
+
+    # Resource limits (adjust based on your system)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ==========================================================================
+  # Adminer - Database Management UI
+  # ==========================================================================
+  adminer:
+    image: adminer:latest
+    container_name: urlshortener-adminer
+    restart: unless-stopped
+
+    # Port mapping: access at http://localhost:8081 (changed from 8080 to avoid conflicts)
+    ports:
+      - "8081:8080"
+
+    # Network
+    networks:
+      - url-shortener-network
+
+    # Depends on MySQL being ready
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  url-shortener-network:
+    driver: bridge
+    name: urlshortener-network
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  mysql_data:
+    driver: local
+    name: urlshortener-mysql-data
+
+# ============================================================================
+# USAGE INSTRUCTIONS
+# ============================================================================
+#
+# Start services:
+#   docker-compose up -d
+#
+# Stop services:
+#   docker-compose down
+#
+# Stop and remove data:
+#   docker-compose down -v
+#
+# View logs:
+#   docker-compose logs -f mysql
+#
+# Connect to MySQL CLI:
+#   docker-compose exec mysql mysql -u urluser -purlpassword url_shortener
+#
+# Access Adminer UI:
+#   http://localhost:8080
+#   System: MySQL
+#   Server: mysql
+#   Username: urluser
+#   Password: urlpassword
+#   Database: url_shortener
+#
+# Environment variables for your app:
+#   DB_HOST=localhost
+#   DB_PORT=3306
+#   DB_USER=urluser
+#   DB_PASSWORD=urlpassword
+#   DB_NAME=url_shortener
+#
+# ============================================================================

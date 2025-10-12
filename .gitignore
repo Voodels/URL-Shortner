@@ -1,0 +1,47 @@
+# Deno
+node_modules/
+npm-debug.log*
+.deno/
+
+# Build outputs
+dist/
+build/
+*.js.map
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+backend.log
+frontend.log
+
+# OS
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Lock files (Deno uses deno.lock)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
