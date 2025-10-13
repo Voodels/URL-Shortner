@@ -2,90 +2,71 @@
 
 ## System Overview
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         CLIENT LAYER                         │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              React Frontend (Port 5173)              │   │
-│  │                                                      │   │
-│  │  ┌────────────┐  ┌────────────┐  ┌──────────────┐  │   │
-│  │  │    App     │  │  URLForm   │  │   URLCard    │  │   │
-│  │  │ Component  │  │ Component  │  │  Component   │  │   │
-│  │  └────────────┘  └────────────┘  └──────────────┘  │   │
-│  │         │               │                │          │   │
-│  │         │               │                │          │   │
-│  │  ┌────────────┐  ┌──────────────┐  ┌──────────────┐ │   │
-│  │  │ThemeToggle │  │AnimatedBackg.│  │ Auth/Theme    │ │   │
-│  │  │ Component  │  │  Component   │  │ Contexts      │ │   │
-│  │  └────────────┘  └──────────────┘  └──────────────┘ │   │
-│  │         └───────────────┴───────────────────────────┘   │
-│  │                        │                                │
-│  │                 ┌──────▼──────┐                         │
-│  │                 │  API Client │                         │
-│  │                 └──────┬──────┘                         │
-│  └────────────────────────┼─────────────────────────────┘  │
-└────────────────────────────┼────────────────────────────────┘
-                             │
-                    HTTP/JSON (CORS Enabled)
-                             │
-┌────────────────────────────▼────────────────────────────────┐
-│                      API GATEWAY LAYER                       │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │           Deno HTTP Server (Port 8000)               │   │
-│  │                                                      │   │
-│  │  ┌─────────────┐  ┌──────────────┐  ┌───────────┐  │   │
-│  │  │   Logging   │─→│     CORS     │─→│  Router   │  │   │
-│  │  │  Middleware │  │  Middleware  │  │           │  │   │
-│  │  └─────────────┘  └──────────────┘  └─────┬─────┘  │   │
-│  └────────────────────────────────────────────┼────────┘   │
-└────────────────────────────────────────────────┼────────────┘
-                                                 │
-                                          Route Handlers
-                                                 │
-┌────────────────────────────────────────────────▼────────────┐
-│                     BUSINESS LOGIC LAYER                     │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │                    Route Handlers                    │   │
-│  │                                                      │   │
-│  │  ┌─────────────────────────────────────────────┐    │   │
-│  │  │  • createShortURL()                         │    │   │
-│  │  │  • getOriginalURL()                         │    │   │
-│  │  │  • updateShortURL()                         │    │   │
-│  │  │  • deleteShortURL()                         │    │   │
-│  │  │  • getURLStats()                            │    │   │
-│  │  │  • incrementAccessCount()                   │    │   │
-│  │  └─────────────────────────────────────────────┘    │   │
-│  │                        │                            │   │
-│  │              ┌─────────▼──────────┐                 │   │
-│  │              │  Validation Layer  │                 │   │
-│  │              └─────────┬──────────┘                 │   │
-│  └────────────────────────┼─────────────────────────────┘  │
-└────────────────────────────┼────────────────────────────────┘
-                             │
-                     Repository Interface
-                             │
-┌────────────────────────────▼────────────────────────────────┐
-│                     DATA ACCESS LAYER                        │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              URLRepository Interface                 │   │
-│  │                                                      │   │
-│  │  ┌────────────────────────────────────────────┐     │   │
-│  │  │         InMemoryURLRepository              │     │   │
-│  │  │                                            │     │   │
-│  │  │  Data Structures:                          │     │   │
-│  │  │  • Map<shortCode, ShortenedURL>            │     │   │
-│  │  │  • Map<id, shortCode>                      │     │   │
-│  │  │                                            │     │   │
-│  │  │  Performance: O(1) for all operations     │     │   │
-│  │  └────────────────────────────────────────────┘     │   │
-│  │                                                      │   │
-│  │  Future: PostgreSQL, MongoDB, Redis implementations │   │
-│  └──────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        Browser[Web Browser]
+        Frontend[React Frontend<br/>Port 5173]
+
+        subgraph "Components"
+            App[App Component]
+            URLForm[URLForm Component]
+            URLCard[URLCard Component]
+            ThemeToggle[ThemeToggle Component]
+            AnimatedBG[AnimatedBackground Component]
+            Contexts[Auth/Theme Contexts]
+        end
+
+        APIClient[API Client]
+    end
+
+    subgraph "API Gateway Layer"
+        DenoServer[Deno HTTP Server<br/>Port 8000]
+        LogMW[Logging Middleware]
+        CORSMW[CORS Middleware]
+        Router[Router]
+    end
+
+    subgraph "Business Logic Layer"
+        RouteHandlers[Route Handlers]
+        Operations["• createShortURL()<br/>• getOriginalURL()<br/>• updateShortURL()<br/>• deleteShortURL()<br/>• getURLStats()<br/>• incrementAccessCount()"]
+        Validation[Validation Layer]
+    end
+
+    subgraph "Data Access Layer"
+        RepoInterface[URLRepository Interface]
+        InMemory["InMemoryURLRepository<br/><br/>Data Structures:<br/>• Map&lt;shortCode, ShortenedURL&gt;<br/>• Map&lt;id, shortCode&gt;<br/><br/>Performance: O(1)"]
+        Future["Future: PostgreSQL,<br/>MongoDB, Redis"]
+    end
+
+    Browser --> Frontend
+    Frontend --> App
+    Frontend --> URLForm
+    Frontend --> URLCard
+    Frontend --> ThemeToggle
+    Frontend --> AnimatedBG
+    Frontend --> Contexts
+    App --> APIClient
+    URLForm --> APIClient
+    URLCard --> APIClient
+
+    APIClient -->|HTTP/JSON<br/>CORS Enabled| DenoServer
+    DenoServer --> LogMW
+    LogMW --> CORSMW
+    CORSMW --> Router
+    Router -->|Route Handlers| RouteHandlers
+    RouteHandlers --> Operations
+    Operations --> Validation
+    Validation -->|Repository Interface| RepoInterface
+    RepoInterface --> InMemory
+    RepoInterface -.-> Future
+
+    style Browser fill:#e1f5ff
+    style Frontend fill:#bbdefb
+    style DenoServer fill:#c8e6c9
+    style RouteHandlers fill:#fff9c4
+    style RepoInterface fill:#ffccbc
+    style InMemory fill:#ffab91
 ```
 
 ### Frontend Component Responsibilities
@@ -104,88 +85,69 @@
 
 ### Create Short URL
 
-```
-┌────────┐      ┌──────────┐      ┌────────┐      ┌────────────┐
-│ Client │      │   API    │      │ Routes │      │ Repository │
-└───┬────┘      └────┬─────┘      └───┬────┘      └─────┬──────┘
-    │                │                 │                  │
-    │ POST /shorten  │                 │                  │
-    │────────────────>                 │                  │
-    │                │                 │                  │
-    │                │  Validate Body  │                  │
-    │                │────────────────>                   │
-    │                │                 │                  │
-    │                │                 │ Generate Code    │
-    │                │                 │                  │
-    │                │                 │  Create Entity   │
-    │                │                 │─────────────────>│
-    │                │                 │                  │
-    │                │                 │   Store & Return │
-    │                │                 │<─────────────────│
-    │                │                 │                  │
-    │                │  201 Created    │                  │
-    │<────────────────────────────────│                  │
-    │                │                 │                  │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API
+    participant Routes
+    participant Repository
+
+    Client->>API: POST /shorten
+    API->>Routes: Validate Body
+    Routes->>Routes: Generate Code
+    Routes->>Repository: Create Entity
+    Repository-->>Routes: Store & Return
+    Routes-->>API: 201 Created
+    API-->>Client: Return Short URL
 ```
 
 ### Redirect Flow
 
-```
-┌────────┐      ┌──────────┐      ┌────────┐      ┌────────────┐
-│ Client │      │   API    │      │ Routes │      │ Repository │
-└───┬────┘      └────┬─────┘      └───┬────┘      └─────┬──────┘
-    │                │                 │                  │
-    │ GET /:code     │                 │                  │
-    │────────────────>                 │                  │
-    │                │                 │                  │
-    │                │   Find by Code  │                  │
-    │                │────────────────>│                  │
-    │                │                 │                  │
-    │                │                 │  Lookup          │
-    │                │                 │─────────────────>│
-    │                │                 │                  │
-    │                │                 │  Return URL      │
-    │                │                 │<─────────────────│
-    │                │                 │                  │
-    │                │   200 OK        │                  │
-    │<────────────────────────────────│                  │
-    │                │                 │                  │
-    │ POST /:code    │                 │                  │
-    │   /access      │                 │                  │
-    │────────────────>                 │                  │
-    │                │                 │                  │
-    │                │  Increment      │                  │
-    │                │────────────────>│                  │
-    │                │                 │                  │
-    │                │                 │  Update Counter  │
-    │                │                 │─────────────────>│
-    │                │                 │                  │
-    │   Redirect     │                 │                  │
-    │   to URL       │                 │                  │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API
+    participant Routes
+    participant Repository
+
+    Client->>API: GET /:code
+    API->>Routes: Find by Code
+    Routes->>Repository: Lookup
+    Repository-->>Routes: Return URL
+    Routes-->>API: 200 OK
+    API-->>Client: Return URL Data
+
+    Client->>API: POST /:code/access
+    API->>Routes: Increment
+    Routes->>Repository: Update Counter
+    Repository-->>Routes: Success
+    Routes-->>Client: Redirect to URL
 ```
 
 ## Authentication Flow
 
-```
-┌────────┐      ┌──────────┐      ┌────────┐      ┌────────────┐
-│ Client │      │   API    │      │ Auth   │      │ Repository │
-└───┬────┘      └────┬─────┘      └───┬────┘      └─────┬──────┘
-        │                │                 │                  │
-        │ POST /auth/register or /auth/login                  │
-        │────────────────────────────────────────────────────>│
-        │                │                 │  Hash password    │
-        │                │                 │  or verify hash   │
-        │                │                 │──────────────────>│
-        │                │                 │                  │
-        │                │   Issue JWT     │                  │
-        │<────────────────────────────────────────────────────│
-        │                │                 │                  │
-        │   Store token in AuthContext, attach as Bearer header│
-        │────────────────────────────────────────────────────>│
-        │                │                 │  Resolve user     │
-        │                │                 │──────────────────>│
-        │                │                 │                  │
-        │   Authorized access to /urls, /shorten endpoints     │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API
+    participant Auth
+    participant Repository
+
+    Client->>API: POST /auth/register or /auth/login
+    API->>Auth: Validate Credentials
+    Auth->>Repository: Hash password or verify hash
+    Repository-->>Auth: Success
+    Auth->>Auth: Issue JWT
+    Auth-->>Client: Return token + user
+
+    Note over Client: Store token in AuthContext
+
+    Client->>API: Request with Bearer token
+    API->>Auth: Validate JWT
+    Auth->>Repository: Resolve user
+    Repository-->>Auth: User data
+    Auth-->>API: Authorized
+    API-->>Client: Authorized access to /urls, /shorten endpoints
 ```
 
 ## Data Model
@@ -237,8 +199,15 @@ interface URLRepository {
 **Purpose**: Composable request processing
 
 **Implementation**:
-```typescript
-Request → Logging → CORS → Router → Response
+```mermaid
+graph LR
+    Request[Request] --> Logging[Logging]
+    Logging --> CORS[CORS]
+    CORS --> Router[Router]
+    Router --> Response[Response]
+
+    style Request fill:#e3f2fd
+    style Response fill:#c8e6c9
 ```
 
 **Benefits**:
@@ -296,85 +265,124 @@ export const urlRepository: URLRepository = new InMemoryURLRepository();
 ## Security Architecture
 
 ### Input Validation
-```
-Client Input
-    │
-    ▼
-Type Checking ────> Reject non-string/object
-    │
-    ▼
-Length Validation ─> Reject too long URLs
-    │
-    ▼
-Format Validation ─> Reject invalid URLs
-    │
-    ▼
-Protocol Check ────> Only HTTP/HTTPS
-    │
-    ▼
-Hostname Check ────> Require valid hostname
-    │
-    ▼
-Accepted ✓
+```mermaid
+graph TD
+    Input[Client Input]
+    Input --> TypeCheck{Type Checking}
+    TypeCheck -->|Invalid| Reject1[Reject non-string/object]
+    TypeCheck -->|Valid| LengthCheck{Length Validation}
+    LengthCheck -->|Too Long| Reject2[Reject too long URLs]
+    LengthCheck -->|Valid| FormatCheck{Format Validation}
+    FormatCheck -->|Invalid| Reject3[Reject invalid URLs]
+    FormatCheck -->|Valid| ProtocolCheck{Protocol Check}
+    ProtocolCheck -->|Not HTTP/HTTPS| Reject4[Only HTTP/HTTPS]
+    ProtocolCheck -->|Valid| HostCheck{Hostname Check}
+    HostCheck -->|Invalid| Reject5[Require valid hostname]
+    HostCheck -->|Valid| Accepted[Accepted ✓]
+
+    style Accepted fill:#4caf50,color:#fff
+    style Reject1 fill:#f44336,color:#fff
+    style Reject2 fill:#f44336,color:#fff
+    style Reject3 fill:#f44336,color:#fff
+    style Reject4 fill:#f44336,color:#fff
+    style Reject5 fill:#f44336,color:#fff
 ```
 
 ### CORS Protection
-```
-Request Origin
-    │
-    ▼
-Check Whitelist
-    │
-    ├─> Allowed → Add CORS headers
-    │
-    └─> Not Allowed → No CORS headers (browser blocks)
+```mermaid
+graph TD
+    Origin[Request Origin]
+    Origin --> Whitelist{Check Whitelist}
+    Whitelist -->|Allowed| AddHeaders[Add CORS headers]
+    Whitelist -->|Not Allowed| Block[No CORS headers<br/>Browser blocks]
+
+    style AddHeaders fill:#4caf50,color:#fff
+    style Block fill:#f44336,color:#fff
 ```
 
 ### Short Code Generation
-```
-Random Bytes (Crypto API)
-    │
-    ▼
-Base62 Encoding
-    │
-    ▼
-Collision Check ────> Exists? → Retry
-    │                              │
-    ▼                              │
-Not Exists ◄────────────────────────┘
-    │
-    ▼
-Use Code ✓
+```mermaid
+graph TD
+    Random[Random Bytes<br/>Crypto API]
+    Random --> Base62[Base62 Encoding]
+    Base62 --> Collision{Collision Check}
+    Collision -->|Exists| Retry[Retry Generation]
+    Retry --> Random
+    Collision -->|Not Exists| Use[Use Code ✓]
+
+    style Use fill:#4caf50,color:#fff
+    style Retry fill:#ff9800,color:#fff
 ```
 
 ## Scalability Considerations
 
 ### Current (MVP)
-- In-memory storage
-- Single server
-- O(1) lookups
-- No persistence
+```mermaid
+graph LR
+    Client[Client] --> Server[Single Server<br/>In-Memory Storage]
+    Server --> Memory[(Memory<br/>O1 Lookups)]
+
+    style Server fill:#ffeb3b
+    style Memory fill:#fff9c4
+```
 
 ### Next Steps
-1. **Database Layer**
-   - PostgreSQL for ACID compliance
-   - Redis for caching
-   - Connection pooling
 
-2. **Horizontal Scaling**
-   - Load balancer
-   - Multiple backend instances
-   - Shared database
+#### 1. Database Layer
+```mermaid
+graph TB
+    App[Application]
+    App --> Pool[Connection Pool]
+    Pool --> Primary[(PostgreSQL<br/>Primary)]
+    Pool --> Redis[(Redis Cache)]
+    Primary --> Replica1[(Replica 1)]
+    Primary --> Replica2[(Replica 2)]
 
-3. **Caching Strategy**
-   - Cache popular URLs in Redis
-   - Cache aside pattern
-   - TTL-based expiration
+    style Primary fill:#4caf50,color:#fff
+    style Redis fill:#ff9800,color:#fff
+```
 
-4. **Analytics Pipeline**
-   - Queue access events
-   - Process asynchronously
-   - Time-series database
+#### 2. Horizontal Scaling
+```mermaid
+graph TB
+    Client[Clients]
+    Client --> LB[Load Balancer]
+    LB --> Server1[Backend 1]
+    LB --> Server2[Backend 2]
+    LB --> Server3[Backend 3]
+    Server1 --> DB[(Shared Database)]
+    Server2 --> DB
+    Server3 --> DB
+
+    style LB fill:#2196f3,color:#fff
+    style DB fill:#4caf50,color:#fff
+```
+
+#### 3. Caching Strategy
+```mermaid
+graph LR
+    Request[Request] --> Cache{Redis Cache}
+    Cache -->|Hit| Return[Return Cached]
+    Cache -->|Miss| DB[(Database)]
+    DB --> Update[Update Cache]
+    Update --> Return
+
+    style Cache fill:#ff9800,color:#fff
+    style Return fill:#4caf50,color:#fff
+```
+
+#### 4. Analytics Pipeline
+```mermaid
+graph LR
+    Event[Click Event] --> Queue[Message Queue]
+    Queue --> Worker1[Worker 1]
+    Queue --> Worker2[Worker 2]
+    Worker1 --> TSDB[(Time-Series DB)]
+    Worker2 --> TSDB
+
+    style Queue fill:#9c27b0,color:#fff
+    style TSDB fill:#00bcd4,color:#fff
+```
 
 ### Migration Path: In-Memory → PostgreSQL
 
@@ -443,26 +451,39 @@ export const urlRepository: URLRepository = new PostgresURLRepository();
 ## Deployment Architecture
 
 ### Development
-```
-Local Machine
-├── Backend (localhost:8000)
-└── Frontend (localhost:5173)
+```mermaid
+graph TB
+    Dev[Local Machine]
+    Dev --> Backend[Backend<br/>localhost:8000]
+    Dev --> Frontend[Frontend<br/>localhost:5173]
+
+    style Dev fill:#e3f2fd
+    style Backend fill:#c8e6c9
+    style Frontend fill:#bbdefb
 ```
 
 ### Production
-```
-Internet
-    │
-    ▼
-Load Balancer (HTTPS)
-    │
-    ├─> Backend Server 1 ──┐
-    ├─> Backend Server 2 ──┼─> PostgreSQL Primary
-    └─> Backend Server 3 ──┘        │
-                                    ├─> Replica 1
-                                    └─> Replica 2
-    │
-    └─> CDN (Static Frontend)
+```mermaid
+graph TB
+    Internet[Internet]
+    Internet --> LB[Load Balancer<br/>HTTPS]
+
+    LB --> Backend1[Backend Server 1]
+    LB --> Backend2[Backend Server 2]
+    LB --> Backend3[Backend Server 3]
+
+    Backend1 --> Primary[(PostgreSQL<br/>Primary)]
+    Backend2 --> Primary
+    Backend3 --> Primary
+
+    Primary --> Replica1[(Replica 1)]
+    Primary --> Replica2[(Replica 2)]
+
+    LB --> CDN[CDN<br/>Static Frontend]
+
+    style LB fill:#2196f3,color:#fff
+    style Primary fill:#4caf50,color:#fff
+    style CDN fill:#ff9800,color:#fff
 ```
 
 ## Technology Stack Rationale
