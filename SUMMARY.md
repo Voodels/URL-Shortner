@@ -105,27 +105,12 @@ sequenceDiagram
 ## Demo
 
 ### Live Deployment
-🚀 **[Try it live](#)** *(Add your deployment URL here)*
+-- not yet 
 
 ### Video Walkthrough
-📹 **[Watch Demo Video](#)** *(Add YouTube/Loom link)*
 
 ### Screenshots
 
-**Landing Page - Cinematic Hero**
-```
-[Add screenshot of login/register page with gradient background]
-```
-
-**Dashboard - URL Management**
-```
-[Add screenshot of authenticated user's dashboard with URL list]
-```
-
-**Theme Switching**
-```
-[Add screenshot showing light/dark theme toggle]
-```
 
 ---
 
