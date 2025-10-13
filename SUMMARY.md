@@ -107,7 +107,6 @@ sequenceDiagram
 ### Live Deployment
 -- not yet
 
-### Video Walkthrough
 
 
 
