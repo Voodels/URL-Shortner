@@ -105,11 +105,10 @@ sequenceDiagram
 ## Demo
 
 ### Live Deployment
--- not yet 
+-- not yet
 
 ### Video Walkthrough
 
-### Screenshots
 
 
 ---
