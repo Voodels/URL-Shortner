@@ -10,22 +10,26 @@
  */
 
 import { FormEvent, useEffect, useState } from "react";
-import type { ShortenedURL } from "../api";
+import type { CategoryWithCount, ShortenedURL } from "../api";
 import { api, APIError } from "../api";
 
 interface URLFormProps {
   onURLCreated: (url: ShortenedURL) => void;
   editingURL?: ShortenedURL | null;
   onCancelEdit?: () => void;
+  categories: CategoryWithCount[];
 }
 
-export function URLForm({ onURLCreated, editingURL, onCancelEdit }: URLFormProps) {
+export function URLForm({ onURLCreated, editingURL, onCancelEdit, categories }: URLFormProps) {
   const [url, setUrl] = useState(editingURL?.url || "");
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+
   useEffect(() => {
     if (editingURL) {
       setUrl(editingURL.url);
     } else {
       setUrl("");
+      setSelectedCategoryIds([]);
     }
   }, [editingURL]);
 
@@ -48,9 +52,9 @@ export function URLForm({ onURLCreated, editingURL, onCancelEdit }: URLFormProps
 
       let result: ShortenedURL;
       if (editingURL) {
-        result = await api.updateURL(editingURL.shortCode, url.trim());
+        result = await api.updateURL(editingURL.shortCode, url.trim(), selectedCategoryIds);
       } else {
-        result = await api.createShortURL(url.trim());
+        result = await api.createShortURL(url.trim(), selectedCategoryIds);
       }
 
       onURLCreated(result);
@@ -146,6 +150,65 @@ export function URLForm({ onURLCreated, editingURL, onCancelEdit }: URLFormProps
                 />
               </div>
             </div>
+
+            {/* Category Selection */}
+            {categories.length > 0 && (
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  <span className="text-xl">🏷️</span>
+                  <span>Organize with Categories (Optional)</span>
+                </label>
+
+                <div className="flex flex-wrap gap-2">
+                  {categories.map((category) => {
+                    const isSelected = selectedCategoryIds.includes(category.id);
+                    return (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategoryIds((prev) =>
+                            isSelected
+                              ? prev.filter((id) => id !== category.id)
+                              : [...prev, category.id]
+                          );
+                        }}
+                        className={`px-4 py-2 rounded-xl border-2 transition-all duration-200 flex items-center gap-2 ${
+                          isSelected
+                            ? `bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white border-transparent shadow-lg scale-105`
+                            : `bg-white/50 dark:bg-white/5 border-white/30 dark:border-white/10 hover:border-purple-500/50 dark:hover:border-purple-400/50 text-gray-700 dark:text-gray-300 hover:scale-105`
+                        }`}
+                      >
+                        <span className="text-lg">{category.icon}</span>
+                        <span className="font-medium text-sm">{category.name}</span>
+                        {isSelected && (
+                          <svg
+                            className="w-4 h-4"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {selectedCategoryIds.length > 0 && (
+                  <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <span>{selectedCategoryIds.length} {selectedCategoryIds.length === 1 ? 'category' : 'categories'} selected</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Buttons Row */}
             <div className="flex gap-3">

@@ -7,9 +7,11 @@
  * - Provide analytics snapshot and theme-aware chrome
  */
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { api, APIError, type ShortenedURL } from "./api";
+import { api, APIError, type CategoryWithCount, type ShortenedURL } from "./api";
 import { useAuth } from "./AuthContext";
 import { AnimatedBackground } from "./components/AnimatedBackground";
+import { CategoryManager } from "./components/CategoryManager";
+import { CategoryTabs } from "./components/CategoryTabs";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { URLCard } from "./components/URLCard";
 import { URLForm } from "./components/URLForm";
@@ -34,6 +36,10 @@ export default function App() {
   });
   const [editingURL, setEditingURL] = useState<ShortenedURL | undefined>(undefined);
 
+  // Category state
+  const [categories, setCategories] = useState<CategoryWithCount[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -42,6 +48,33 @@ export default function App() {
   // =============================================================================
   // DATA LOADING
   // =============================================================================
+
+  // Load categories when authenticated
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!isAuthenticated) {
+      setCategories([]);
+      return;
+    }
+
+    async function fetchCategories() {
+      try {
+        const { categories: cats } = await api.getCategories();
+        if (!cancelled) {
+          setCategories(cats);
+        }
+      } catch (error) {
+        console.error("Failed to load categories:", error);
+      }
+    }
+
+    fetchCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,7 +87,11 @@ export default function App() {
     async function fetchUrls() {
       setUrlsState((prev) => ({ ...prev, loading: true, error: null }));
       try {
-        const { urls } = await api.getUserURLs();
+        // Fetch filtered or all URLs based on selected category
+        const { urls } = selectedCategoryId
+          ? await api.getURLsByCategory(selectedCategoryId)
+          : await api.getUserURLs();
+
         if (!cancelled) {
           setUrlsState({ data: urls, loading: false, error: null });
         }
@@ -74,7 +111,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, selectedCategoryId]);
 
   // =============================================================================
   // DERIVED DATA
@@ -136,7 +173,7 @@ export default function App() {
   // URL EVENT HANDLERS
   // =============================================================================
 
-  const handleURLCreated = (url: ShortenedURL) => {
+  const handleURLCreated = async (url: ShortenedURL) => {
     if (editingURL) {
       setUrlsState((prev) => ({
         ...prev,
@@ -145,13 +182,20 @@ export default function App() {
         ),
       }));
       setEditingURL(undefined);
-      return;
+    } else {
+      setUrlsState((prev) => ({
+        ...prev,
+        data: [url, ...prev.data],
+      }));
     }
 
-    setUrlsState((prev) => ({
-      ...prev,
-      data: [url, ...prev.data],
-    }));
+    // Refresh categories to update URL counts
+    try {
+      const { categories: cats } = await api.getCategories();
+      setCategories(cats);
+    } catch (error) {
+      console.error("Failed to refresh categories:", error);
+    }
   };
 
   const handleEdit = (url: ShortenedURL) => {
@@ -162,7 +206,7 @@ export default function App() {
     setEditingURL(undefined);
   };
 
-  const handleDelete = (shortCode: string) => {
+  const handleDelete = async (shortCode: string) => {
     setUrlsState((prev) => ({
       ...prev,
       data: prev.data.filter((url) => url.shortCode !== shortCode),
@@ -170,6 +214,14 @@ export default function App() {
 
     if (editingURL?.shortCode === shortCode) {
       setEditingURL(undefined);
+    }
+
+    // Refresh categories to update URL counts
+    try {
+      const { categories: cats } = await api.getCategories();
+      setCategories(cats);
+    } catch (error) {
+      console.error("Failed to refresh categories:", error);
     }
   };
 
@@ -180,6 +232,27 @@ export default function App() {
         existing.shortCode === url.shortCode ? url : existing
       ),
     }));
+  };
+
+  // =============================================================================
+  // DRAG AND DROP HANDLERS
+  // =============================================================================
+
+  const handleDropOnCategory = async (shortCode: string, categoryId: string) => {
+    try {
+      // Add the URL to the category
+      await api.addCategoriesToURL(shortCode, [categoryId]);
+
+      // Refresh categories to update counts
+      const { categories: cats } = await api.getCategories();
+      setCategories(cats);
+
+      // Show success feedback (optional)
+      console.log(`Added ${shortCode} to category ${categoryId}`);
+    } catch (error) {
+      console.error("Failed to add URL to category:", error);
+      // Could show an error toast here
+    }
   };
 
   // =============================================================================
@@ -459,7 +532,12 @@ export default function App() {
         <section className="mb-12">
           <div className="card glass shadow-2xl border border-base-200/40">
             <div className="card-body">
-              <URLForm onURLCreated={handleURLCreated} editingURL={editingURL} onCancelEdit={handleCancelEdit} />
+              <URLForm
+                onURLCreated={handleURLCreated}
+                editingURL={editingURL}
+                onCancelEdit={handleCancelEdit}
+                categories={categories}
+              />
             </div>
           </div>
         </section>
@@ -477,14 +555,52 @@ export default function App() {
               <p className="mt-1 text-base-content/70">Manage, customize, and explore analytics for every link.</p>
             </div>
 
-            {urlsState.data.length > 0 && (
-              <div className="join shadow-lg">
-                <button className="btn join-item btn-sm btn-outline">All</button>
-                <button className="btn join-item btn-sm btn-outline btn-primary">Active</button>
-                <button className="btn join-item btn-sm btn-outline">Archived</button>
-              </div>
-            )}
+            {/* Category Manager with built-in button */}
+            <CategoryManager
+              categories={categories}
+              onCategoryCreated={async () => {
+                try {
+                  const { categories: cats } = await api.getCategories();
+                  setCategories(cats);
+                } catch (error) {
+                  console.error("Failed to refresh categories:", error);
+                }
+              }}
+              onCategoryUpdated={async () => {
+                try {
+                  const { categories: cats } = await api.getCategories();
+                  setCategories(cats);
+                } catch (error) {
+                  console.error("Failed to refresh categories:", error);
+                }
+              }}
+              onCategoryDeleted={async () => {
+                try {
+                  const { categories: cats } = await api.getCategories();
+                  setCategories(cats);
+                } catch (error) {
+                  console.error("Failed to refresh categories:", error);
+                }
+              }}
+            />
           </div>
+
+          {/* Category Tabs for filtering */}
+          {categories.length > 0 && (
+            <div className="mb-6">
+              <div className="alert alert-info mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>💡 <strong>Tip:</strong> Drag and drop URL cards onto category tabs to organize them!</span>
+              </div>
+              <CategoryTabs
+                categories={categories}
+                selectedCategoryId={selectedCategoryId}
+                onSelectCategory={setSelectedCategoryId}
+                totalURLCount={urlsState.data.length}
+                onDrop={handleDropOnCategory}
+              />
+            </div>
+          )}
 
           {urlsState.error && (
             <div className="alert alert-error mb-6">

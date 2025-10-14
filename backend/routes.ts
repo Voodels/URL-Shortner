@@ -22,28 +22,31 @@
  */
 
 import {
-    ensureAuthHeader,
-    generateAuthToken,
-    hashPassword,
-    toPublicUser,
-    verifyPassword,
+  ensureAuthHeader,
+  generateAuthToken,
+  hashPassword,
+  toPublicUser,
+  verifyPassword,
 } from "./auth-service.ts";
-import { getRepository, getUserRepository } from "./database.ts";
+import { getCategoryRepository, getRepository, getUserRepository } from "./database.ts";
 import type {
-    AuthCredentials,
-    AuthResponse,
-    ShortenedURL,
-    User
+  AuthCredentials,
+  AuthResponse,
+  Category,
+  CreateCategoryRequest,
+  ShortenedURL,
+  UpdateCategoryRequest,
+  User
 } from "./types.ts";
 import {
-    AuthenticationError,
-    AuthorizationError,
-    NotFoundError,
-    ValidationError,
-    validateAuthCredentials,
-    validateCreateURLRequest,
-    validateUpdateURLRequest,
-    type ErrorResponse,
+  AuthenticationError,
+  AuthorizationError,
+  NotFoundError,
+  ValidationError,
+  validateAuthCredentials,
+  validateCreateURLRequest,
+  validateUpdateURLRequest,
+  type ErrorResponse,
 } from "./types.ts";
 
 async function requireUser(req: Request): Promise<User> {
@@ -274,7 +277,7 @@ export async function createShortURL(req: Request): Promise<Response> {
     const body = await req.json();
     validateCreateURLRequest(body);
 
-    const { url } = body;
+    const { url, categoryIds } = body;
 
     // Generate unique short code with collision handling
     const shortCode = await generateShortCode();
@@ -293,6 +296,11 @@ export async function createShortURL(req: Request): Promise<Response> {
 
     // Persist to repository
     const created = await getRepository().create(shortenedURL);
+
+    // Add categories if provided
+    if (categoryIds && Array.isArray(categoryIds) && categoryIds.length > 0) {
+      await getRepository().addCategoriesToURL(created.id, categoryIds);
+    }
 
     // Return 201 Created with Location header (REST best practice)
     return new Response(JSON.stringify(created), {
@@ -637,24 +645,238 @@ export async function incrementAccessCount(
 }
 
 // ============================================================================
+// CATEGORY ROUTES
+// ============================================================================
+
+/**
+ * Get all categories for the authenticated user
+ */
+export async function getUserCategories(req: Request): Promise<Response> {
+  try {
+    const user = await requireUser(req);
+    const categoryRepo = getCategoryRepository();
+    const categories = await categoryRepo.getAllByUserWithCount(user.id);
+
+    return new Response(JSON.stringify({ categories }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+/**
+ * Create a new category
+ */
+export async function createCategory(req: Request): Promise<Response> {
+  try {
+    const user = await requireUser(req);
+    const body = await req.json();
+    const { name, description, icon, color } = body as CreateCategoryRequest;
+
+    if (!name || name.trim().length === 0) {
+      throw new ValidationError("Category name is required");
+    }
+
+    const categoryRepo = getCategoryRepository();
+    const timestamp = new Date().toISOString();
+
+    const category: Category = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      description: description?.trim(),
+      icon: icon || "📁",
+      color: color || "primary",
+      userId: user.id,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+
+    await categoryRepo.create(category);
+
+    return new Response(JSON.stringify(category), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+/**
+ * Update a category
+ */
+export async function updateCategory(
+  req: Request,
+  categoryId: string,
+): Promise<Response> {
+  try {
+    const user = await requireUser(req);
+    const categoryRepo = getCategoryRepository();
+
+    const existing = await categoryRepo.findById(categoryId);
+
+    if (!existing) {
+      throw new NotFoundError(`Category not found`);
+    }
+
+    if (existing.userId !== user.id) {
+      throw new AuthorizationError("You do not have access to this category");
+    }
+
+    const body = await req.json();
+    const { name, description, icon, color } = body as UpdateCategoryRequest;
+
+    const updated: Category = {
+      ...existing,
+      name: name?.trim() ?? existing.name,
+      description: description?.trim() ?? existing.description,
+      icon: icon ?? existing.icon,
+      color: color ?? existing.color,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await categoryRepo.update(categoryId, updated);
+
+    return new Response(JSON.stringify(updated), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+/**
+ * Delete a category
+ */
+export async function deleteCategory(
+  req: Request,
+  categoryId: string,
+): Promise<Response> {
+  try {
+    const user = await requireUser(req);
+    const categoryRepo = getCategoryRepository();
+
+    const existing = await categoryRepo.findById(categoryId);
+
+    if (!existing) {
+      throw new NotFoundError(`Category not found`);
+    }
+
+    if (existing.userId !== user.id) {
+      throw new AuthorizationError("You do not have access to this category");
+    }
+
+    await categoryRepo.delete(categoryId);
+
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+/**
+ * Get URLs by category
+ */
+export async function getURLsByCategory(
+  req: Request,
+  categoryId: string,
+): Promise<Response> {
+  try {
+    const user = await requireUser(req);
+    const urlRepo = getRepository();
+
+    const urls = await urlRepo.getURLsByCategory(categoryId, user.id);
+
+    return new Response(JSON.stringify({ urls }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+/**
+ * Add categories to a URL
+ */
+export async function addCategoriesToURL(
+  req: Request,
+  shortCode: string,
+): Promise<Response> {
+  try {
+    const user = await requireUser(req);
+    const urlRepo = getRepository();
+
+    const url = await urlRepo.findByShortCode(shortCode);
+    assertOwnership(user, url);
+
+    if (!url) {
+      throw new NotFoundError(`URL with short code '${shortCode}' not found`);
+    }
+
+    const body = await req.json();
+    const { categoryIds } = body as { categoryIds: string[] };
+
+    if (!Array.isArray(categoryIds)) {
+      throw new ValidationError("categoryIds must be an array");
+    }
+
+    await urlRepo.addCategoriesToURL(url.id, categoryIds);
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+/**
+ * Remove categories from a URL
+ */
+export async function removeCategoriesFromURL(
+  req: Request,
+  shortCode: string,
+): Promise<Response> {
+  try {
+    const user = await requireUser(req);
+    const urlRepo = getRepository();
+
+    const url = await urlRepo.findByShortCode(shortCode);
+    assertOwnership(user, url);
+
+    if (!url) {
+      throw new NotFoundError(`URL with short code '${shortCode}' not found`);
+    }
+
+    const body = await req.json();
+    const { categoryIds } = body as { categoryIds: string[] };
+
+    if (!Array.isArray(categoryIds)) {
+      throw new ValidationError("categoryIds must be an array");
+    }
+
+    await urlRepo.removeCategoriesFromURL(url.id, categoryIds);
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+// ============================================================================
 // ERROR HANDLING
 // ============================================================================
 
 /**
- * Centralized error handler for all routes
- *
- * ERROR HANDLING STRATEGY:
- * - Catch all errors in route handlers
- * - Delegate to this function for consistent error responses
- * - Map error types to appropriate HTTP status codes
- * - Return user-friendly error messages (no stack traces to client)
- * - Log detailed errors server-side
- *
- * SECURITY: Never expose internal error details to client
- * OBSERVABILITY: Log errors with context for debugging
- *
- * @param error - The error to handle
- * @returns Response with appropriate status code and error message
+ * Central error handling
  */
 function handleError(error: unknown): Response {
   // Type-safe error handling

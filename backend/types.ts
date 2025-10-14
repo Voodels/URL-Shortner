@@ -48,6 +48,25 @@ export interface PublicUser {
   readonly updatedAt: string;
 }
 
+export interface Category {
+  readonly id: string;              // Unique identifier (UUID)
+  name: string;                     // Category name
+  description?: string;             // Optional description
+  icon: string;                     // Emoji or icon identifier
+  color: string;                    // DaisyUI color theme (primary, secondary, accent, etc.)
+  readonly userId: string;          // Owner of the category
+  readonly createdAt: string;       // ISO 8601 timestamp
+  updatedAt: string;                // ISO 8601 timestamp
+}
+
+export interface ShortenedURLWithCategories extends ShortenedURL {
+  categories?: Category[];          // Associated categories for this URL
+}
+
+export interface CategoryWithCount extends Category {
+  urlCount: number;                 // Number of URLs in this category
+}
+
 export interface AuthCredentials {
   email: string;
   password: string;
@@ -70,6 +89,7 @@ export interface AuthResponse {
  */
 export interface CreateURLRequest {
   url: string;                      // Only field the client needs to provide
+  categoryIds?: string[];           // Optional category IDs to assign
 }
 
 /**
@@ -80,6 +100,27 @@ export interface CreateURLRequest {
  */
 export interface UpdateURLRequest {
   url: string;
+  categoryIds?: string[];           // Optional category IDs to update
+}
+
+/**
+ * Request DTO for creating a new category
+ */
+export interface CreateCategoryRequest {
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+}
+
+/**
+ * Request DTO for updating an existing category
+ */
+export interface UpdateCategoryRequest {
+  name?: string;
+  description?: string;
+  icon?: string;
+  color?: string;
 }
 
 /**

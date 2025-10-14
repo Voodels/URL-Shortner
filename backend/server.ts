@@ -22,16 +22,23 @@
 
 import { closeDatabase, initializeRepository } from "./database.ts";
 import {
+  addCategoriesToURL,
+  createCategory,
   createShortURL,
+  deleteCategory,
   deleteShortURL,
   getCurrentUser,
   getOriginalURL,
+  getURLsByCategory,
   getURLStats,
+  getUserCategories,
   getUserURLs,
   incrementAccessCount,
   loginUser,
   redirectToOriginalURL,
   registerUser,
+  removeCategoriesFromURL,
+  updateCategory,
   updateShortURL,
 } from "./routes.ts";
 
@@ -298,6 +305,47 @@ async function router(req: Request): Promise<Response> {
 
   if (pathname === "/urls" && method === "GET") {
     return getUserURLs(req);
+  }
+
+  // Category routes
+  if (pathname === "/categories" && method === "GET") {
+    return getUserCategories(req);
+  }
+
+  if (pathname === "/categories" && method === "POST") {
+    return createCategory(req);
+  }
+
+  // Match pattern: /categories/:categoryId
+  const categoryMatch = pathname.match(/^\/categories\/([^\/]+)$/);
+  if (categoryMatch) {
+    const categoryId = categoryMatch[1];
+
+    if (method === "PUT") {
+      return updateCategory(req, categoryId);
+    }
+
+    if (method === "DELETE") {
+      return deleteCategory(req, categoryId);
+    }
+
+    if (method === "GET") {
+      return getURLsByCategory(req, categoryId);
+    }
+  }
+
+  // Match pattern: /shorten/:shortCode/categories
+  const urlCategoriesMatch = pathname.match(/^\/shorten\/([^\/]+)\/categories$/);
+  if (urlCategoriesMatch) {
+    const shortCode = urlCategoriesMatch[1];
+
+    if (method === "POST") {
+      return addCategoriesToURL(req, shortCode);
+    }
+
+    if (method === "DELETE") {
+      return removeCategoriesFromURL(req, shortCode);
+    }
   }
 
   // Health check endpoint

@@ -1,17 +1,17 @@
 /**
  * URLForm Component - Form for creating and updating shortened URLs
- * 
+ *
  * DESIGN PATTERNS:
  * 1. Controlled Components: React manages form state
  * 2. Optimistic UI: Shows immediate feedback
  * 3. Error Boundaries: Graceful error handling
- * 
+ *
  * ACCESSIBILITY:
  * - Semantic HTML (form, label, input)
  * - ARIA labels and roles
  * - Keyboard navigation support
  * - Screen reader friendly error messages
- * 
+ *
  * UX CONSIDERATIONS:
  * - Clear visual feedback (loading, success, error states)
  * - Disabled submit during request (prevents double submission)
@@ -19,9 +19,9 @@
  * - Input validation feedback
  */
 
-import { useState, FormEvent } from "react";
+import { FormEvent, useState } from "react";
+import type { CategoryWithCount, ShortenedURL } from "../api";
 import { api, APIError } from "../api";
-import type { ShortenedURL } from "../api";
 
 // ============================================================================
 // COMPONENT PROPS
@@ -44,6 +44,11 @@ interface URLFormProps {
    * Callback when editing is cancelled
    */
   onCancelEdit?: () => void;
+
+  /**
+   * Optional: Available categories for organizing URLs
+   */
+  categories?: CategoryWithCount[];
 }
 
 // ============================================================================
@@ -52,19 +57,19 @@ interface URLFormProps {
 
 /**
  * Form component for creating/editing shortened URLs
- * 
+ *
  * STATE MANAGEMENT:
  * - url: Input field value
  * - loading: Request in progress
  * - error: Error message to display
  * - success: Success message to display
- * 
+ *
  * LIFECYCLE:
  * - Mount: Initialize with editing URL if provided
  * - Submit: Validate, call API, handle response
  * - Unmount: Clean up (handled by React)
  */
-export function URLForm({ onURLCreated, editingURL, onCancelEdit }: URLFormProps) {
+export function URLForm({ onURLCreated, editingURL, onCancelEdit, categories = [] }: URLFormProps) {
   // ============================================================================
   // STATE
   // ============================================================================
@@ -74,6 +79,12 @@ export function URLForm({ onURLCreated, editingURL, onCancelEdit }: URLFormProps
    * WHY: Allows validation, transformation, and controlled updates
    */
   const [url, setUrl] = useState(editingURL?.url || "");
+
+  /**
+   * CATEGORY SELECTION: Track selected category IDs
+   * MULTI-SELECT: Users can organize URLs with multiple categories
+   */
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
 
   /**
    * LOADING STATE: Prevents duplicate submissions
@@ -93,13 +104,24 @@ export function URLForm({ onURLCreated, editingURL, onCancelEdit }: URLFormProps
    */
   const [success, setSuccess] = useState<string | null>(null);
 
+  /**
+   * Toggle category selection
+   */
+  const toggleCategory = (categoryId: string) => {
+    setSelectedCategoryIds((prev) =>
+      prev.includes(categoryId)
+        ? prev.filter((id) => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
   // ============================================================================
   // EVENT HANDLERS
   // ============================================================================
 
   /**
    * Handle form submission
-   * 
+   *
    * FLOW:
    * 1. Prevent default form submission
    * 2. Validate input
@@ -107,7 +129,7 @@ export function URLForm({ onURLCreated, editingURL, onCancelEdit }: URLFormProps
    * 4. Call API (create or update)
    * 5. Handle success or error
    * 6. Clear loading state
-   * 
+   *
    * ERROR HANDLING:
    * - Validation errors: Show inline
    * - API errors: Show from server response
@@ -144,15 +166,16 @@ export function URLForm({ onURLCreated, editingURL, onCancelEdit }: URLFormProps
 
       if (editingURL) {
         // UPDATE MODE: Call update API
-        result = await api.updateURL(editingURL.shortCode, url);
+        result = await api.updateURL(editingURL.shortCode, url, selectedCategoryIds);
         setSuccess("URL updated successfully!");
       } else {
         // CREATE MODE: Call create API
-        result = await api.createShortURL(url);
+        result = await api.createShortURL(url, selectedCategoryIds);
         setSuccess("Short URL created successfully!");
-        
-        // Clear input after successful creation
+
+        // Clear input and categories after successful creation
         setUrl("");
+        setSelectedCategoryIds([]);
       }
 
       // Notify parent component
@@ -183,7 +206,7 @@ export function URLForm({ onURLCreated, editingURL, onCancelEdit }: URLFormProps
 
   /**
    * Handle cancel editing
-   * 
+   *
    * CLEANUP: Clear form state and notify parent
    */
   const handleCancel = () => {
@@ -225,11 +248,66 @@ export function URLForm({ onURLCreated, editingURL, onCancelEdit }: URLFormProps
               aria-invalid={error ? "true" : "false"}
               aria-describedby={error ? "url-error" : undefined}
             />
-            {/* 
+            {/*
               ACCESSIBILITY: aria-describedby links input to error message
               SCREEN READERS: Will announce error when input is focused
             */}
           </div>
+
+          {/* CATEGORY SELECTION */}
+          {categories.length > 0 && (
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text flex items-center gap-2">
+                  <span className="text-lg">🏷️</span>
+                  Organize with Categories (Optional)
+                </span>
+                {selectedCategoryIds.length > 0 && (
+                  <span className="badge badge-sm badge-primary">
+                    {selectedCategoryIds.length} selected
+                  </span>
+                )}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {categories.map((category) => {
+                  const isSelected = selectedCategoryIds.includes(category.id);
+                  return (
+                    <button
+                      key={category.id}
+                      type="button"
+                      onClick={() => toggleCategory(category.id)}
+                      disabled={loading}
+                      className={`
+                        btn btn-sm gap-2 transition-all duration-200
+                        ${isSelected
+                          ? `btn-${category.color} shadow-lg`
+                          : 'btn-outline btn-ghost'
+                        }
+                      `}
+                    >
+                      <span className="text-base">{category.icon}</span>
+                      <span>{category.name}</span>
+                      {isSelected && (
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* ERROR MESSAGE */}
           {error && (
@@ -295,7 +373,7 @@ export function URLForm({ onURLCreated, editingURL, onCancelEdit }: URLFormProps
                 Cancel
               </button>
             )}
-            
+
             <button
               type="submit"
               className="btn btn-primary"

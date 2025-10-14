@@ -39,12 +39,26 @@ export interface URLRepository {
   incrementAccessCount(shortCode: string): Promise<void>;
   shortCodeExists(shortCode: string): Promise<boolean>;
   getAllByUser(userId: string): Promise<ShortenedURL[]>;
+  getURLsByCategory(categoryId: string, userId: string): Promise<ShortenedURL[]>;
+  addCategoriesToURL(urlId: string, categoryIds: string[]): Promise<void>;
+  removeCategoriesFromURL(urlId: string, categoryIds: string[]): Promise<void>;
+  getCategoriesForURL(urlId: string): Promise<import("./types.ts").Category[]>;
 }
 
 export interface UserRepository {
   create(user: User): Promise<User>;
   findByEmail(email: string): Promise<User | null>;
   findById(id: string): Promise<User | null>;
+}
+
+export interface CategoryRepository {
+  create(category: import("./types.ts").Category): Promise<import("./types.ts").Category>;
+  findById(id: string): Promise<import("./types.ts").Category | null>;
+  findByName(userId: string, name: string): Promise<import("./types.ts").Category | null>;
+  update(id: string, category: import("./types.ts").Category): Promise<import("./types.ts").Category>;
+  delete(id: string): Promise<boolean>;
+  getAllByUser(userId: string): Promise<import("./types.ts").Category[]>;
+  getAllByUserWithCount(userId: string): Promise<import("./types.ts").CategoryWithCount[]>;
 }
 
 // ============================================================================
@@ -86,6 +100,11 @@ export class InMemoryURLRepository implements URLRepository {
    * ALTERNATIVE: Could iterate urlsByShortCode, but that's O(n)
    */
   private shortCodeById: Map<string, string> = new Map();
+
+  /**
+   * URL-Category relationship store: urlId -> categoryIds[]
+   */
+  private urlCategories: Map<string, string[]> = new Map();
 
   /**
    * Create a new shortened URL entry
@@ -249,6 +268,44 @@ export class InMemoryURLRepository implements URLRepository {
     return results;
   }
 
+  async getURLsByCategory(categoryId: string, userId: string): Promise<ShortenedURL[]> {
+    const results: ShortenedURL[] = [];
+
+    for (const url of this.urlsByShortCode.values()) {
+      if (url.userId === userId) {
+        const categories = this.urlCategories.get(url.id) || [];
+        if (categories.includes(categoryId)) {
+          results.push({ ...url });
+        }
+      }
+    }
+
+    return results;
+  }
+
+  async addCategoriesToURL(urlId: string, categoryIds: string[]): Promise<void> {
+    const existing = this.urlCategories.get(urlId) || [];
+    const updated = new Set([...existing, ...categoryIds]);
+    this.urlCategories.set(urlId, Array.from(updated));
+  }
+
+  async removeCategoriesFromURL(urlId: string, categoryIds: string[]): Promise<void> {
+    const existing = this.urlCategories.get(urlId) || [];
+    const toRemove = new Set(categoryIds);
+    const updated = existing.filter(id => !toRemove.has(id));
+    this.urlCategories.set(urlId, updated);
+  }
+
+  getCategoryIdsForURL(urlId: string): string[] {
+    return this.urlCategories.get(urlId) || [];
+  }
+
+  async getCategoriesForURL(urlId: string): Promise<import("./types.ts").Category[]> {
+    // This will be resolved after categoryRepository is instantiated
+    // Temporary return empty array
+    return [];
+  }
+
   /**
    * Get total number of URLs (for monitoring/debugging)
    *
@@ -269,6 +326,119 @@ export class InMemoryURLRepository implements URLRepository {
   clear(): void {
     this.urlsByShortCode.clear();
     this.shortCodeById.clear();
+    this.urlCategories.clear();
+  }
+}
+
+// ============================================================================
+// CATEGORY REPOSITORY IMPLEMENTATION
+// ============================================================================
+
+export class InMemoryCategoryRepository implements CategoryRepository {
+  private categoriesById: Map<string, import("./types.ts").Category> = new Map();
+  private categoriesByUser: Map<string, Set<string>> = new Map();
+
+  async create(category: import("./types.ts").Category): Promise<import("./types.ts").Category> {
+    // Check for duplicate name for this user
+    const existing = await this.findByName(category.userId, category.name);
+    if (existing) {
+      throw new Error(`Category with name '${category.name}' already exists`);
+    }
+
+    this.categoriesById.set(category.id, { ...category });
+
+    if (!this.categoriesByUser.has(category.userId)) {
+      this.categoriesByUser.set(category.userId, new Set());
+    }
+    this.categoriesByUser.get(category.userId)!.add(category.id);
+
+    return { ...category };
+  }
+
+  async findById(id: string): Promise<import("./types.ts").Category | null> {
+    const category = this.categoriesById.get(id);
+    return category ? { ...category } : null;
+  }
+
+  async findByName(userId: string, name: string): Promise<import("./types.ts").Category | null> {
+    const userCategoryIds = this.categoriesByUser.get(userId) || new Set();
+
+    for (const categoryId of userCategoryIds) {
+      const category = this.categoriesById.get(categoryId);
+      if (category && category.name.toLowerCase() === name.toLowerCase()) {
+        return { ...category };
+      }
+    }
+
+    return null;
+  }
+
+  async update(id: string, category: import("./types.ts").Category): Promise<import("./types.ts").Category> {
+    const existing = this.categoriesById.get(id);
+
+    if (!existing) {
+      throw new NotFoundError(`Category with id '${id}' not found`);
+    }
+
+    // Check for duplicate name if name is being changed
+    if (category.name !== existing.name) {
+      const duplicate = await this.findByName(category.userId, category.name);
+      if (duplicate && duplicate.id !== id) {
+        throw new Error(`Category with name '${category.name}' already exists`);
+      }
+    }
+
+    this.categoriesById.set(id, category);
+    return { ...category };
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const category = this.categoriesById.get(id);
+
+    if (!category) {
+      return false;
+    }
+
+    this.categoriesById.delete(id);
+    this.categoriesByUser.get(category.userId)?.delete(id);
+
+    return true;
+  }
+
+  async getAllByUser(userId: string): Promise<import("./types.ts").Category[]> {
+    const userCategoryIds = this.categoriesByUser.get(userId) || new Set();
+    const results: import("./types.ts").Category[] = [];
+
+    for (const categoryId of userCategoryIds) {
+      const category = this.categoriesById.get(categoryId);
+      if (category) {
+        results.push({ ...category });
+      }
+    }
+
+    return results;
+  }
+
+  async getAllByUserWithCount(userId: string): Promise<import("./types.ts").CategoryWithCount[]> {
+    const categories = await this.getAllByUser(userId);
+    const results: import("./types.ts").CategoryWithCount[] = [];
+
+    for (const category of categories) {
+      const urlCount = await this.getURLCountForCategory(category.id, userId);
+      results.push({ ...category, urlCount });
+    }
+
+    return results;
+  }
+
+  private async getURLCountForCategory(categoryId: string, userId: string): Promise<number> {
+    const urls = await urlRepository.getURLsByCategory(categoryId, userId);
+    return urls.length;
+  }
+
+  clear(): void {
+    this.categoriesById.clear();
+    this.categoriesByUser.clear();
   }
 }
 
@@ -294,7 +464,28 @@ export class InMemoryURLRepository implements URLRepository {
  *
  * For this project, singleton is simpler and sufficient
  */
-export const urlRepository: URLRepository = new InMemoryURLRepository();
+const urlRepoInstance = new InMemoryURLRepository();
+export const categoryRepository: CategoryRepository = new InMemoryCategoryRepository();
+
+// Helper to resolve category details for URLs
+export async function getCategoriesForURL(urlId: string): Promise<import("./types.ts").Category[]> {
+  const categoryIds = urlRepoInstance.getCategoryIdsForURL(urlId);
+  const categories: import("./types.ts").Category[] = [];
+
+  for (const categoryId of categoryIds) {
+    const category = await categoryRepository.findById(categoryId);
+    if (category) {
+      categories.push(category);
+    }
+  }
+
+  return categories;
+}
+
+// Override the method to use the helper
+urlRepoInstance.getCategoriesForURL = getCategoriesForURL;
+
+export const urlRepository: URLRepository = urlRepoInstance;
 
 export class InMemoryUserRepository implements UserRepository {
   private usersById: Map<string, User> = new Map();

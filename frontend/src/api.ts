@@ -47,6 +47,21 @@ export interface PublicUser {
   updatedAt: string;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+  description?: string;
+  icon: string;
+  color: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CategoryWithCount extends Category {
+  urlCount: number;
+}
+
 export interface AuthCredentials {
   email: string;
   password: string;
@@ -59,10 +74,26 @@ export interface AuthResponse {
 
 export interface CreateURLRequest {
   url: string;
+  categoryIds?: string[];
 }
 
 export interface UpdateURLRequest {
   url: string;
+  categoryIds?: string[];
+}
+
+export interface CreateCategoryRequest {
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+}
+
+export interface UpdateCategoryRequest {
+  name?: string;
+  description?: string;
+  icon?: string;
+  color?: string;
 }
 
 export interface ErrorResponse {
@@ -241,11 +272,12 @@ export class URLShortenerAPI {
    * POST /shorten
    *
    * @param url - The long URL to shorten
+   * @param categoryIds - Optional array of category IDs
    * @returns Promise with created shortened URL
    * @throws APIError on validation or server errors
    */
-  async createShortURL(url: string): Promise<ShortenedURL> {
-    const request: CreateURLRequest = { url };
+  async createShortURL(url: string, categoryIds?: string[]): Promise<ShortenedURL> {
+    const request: CreateURLRequest = { url, categoryIds };
 
     return this.request<ShortenedURL>("/shorten", {
       method: "POST",
@@ -275,11 +307,12 @@ export class URLShortenerAPI {
    *
    * @param shortCode - The short code to update
    * @param url - The new URL
+   * @param categoryIds - Optional array of category IDs
    * @returns Promise with updated URL
    * @throws APIError if short code not found or validation fails
    */
-  async updateURL(shortCode: string, url: string): Promise<ShortenedURL> {
-    const request: UpdateURLRequest = { url };
+  async updateURL(shortCode: string, url: string, categoryIds?: string[]): Promise<ShortenedURL> {
+    const request: UpdateURLRequest = { url, categoryIds };
 
     return this.request<ShortenedURL>(`/shorten/${shortCode}`, {
       method: "PUT",
@@ -344,6 +377,114 @@ export class URLShortenerAPI {
    */
   getShortURL(shortCode: string): string {
     return `${this.baseURL}/${shortCode}`;
+  }
+
+  // ==========================================================================
+  // CATEGORY METHODS
+  // ==========================================================================
+
+  /**
+   * Get all categories for the authenticated user
+   *
+   * GET /categories
+   *
+   * @returns Promise with array of categories with URL counts
+   */
+  async getCategories(): Promise<{ categories: CategoryWithCount[] }> {
+    return this.request<{ categories: CategoryWithCount[] }>("/categories", {
+      method: "GET",
+    });
+  }
+
+  /**
+   * Create a new category
+   *
+   * POST /categories
+   *
+   * @param data - Category creation data
+   * @returns Promise with created category
+   */
+  async createCategory(data: CreateCategoryRequest): Promise<Category> {
+    return this.request<Category>("/categories", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Update a category
+   *
+   * PUT /categories/:categoryId
+   *
+   * @param categoryId - The category ID to update
+   * @param data - Category update data
+   * @returns Promise with updated category
+   */
+  async updateCategory(categoryId: string, data: UpdateCategoryRequest): Promise<Category> {
+    return this.request<Category>(`/categories/${categoryId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Delete a category
+   *
+   * DELETE /categories/:categoryId
+   *
+   * @param categoryId - The category ID to delete
+   * @returns Promise that resolves when deleted
+   */
+  async deleteCategory(categoryId: string): Promise<void> {
+    await this.request<void>(`/categories/${categoryId}`, {
+      method: "DELETE",
+    });
+  }
+
+  /**
+   * Get all URLs in a category
+   *
+   * GET /categories/:categoryId
+   *
+   * @param categoryId - The category ID
+   * @returns Promise with array of URLs in the category
+   */
+  async getURLsByCategory(categoryId: string): Promise<{ urls: ShortenedURL[] }> {
+    return this.request<{ urls: ShortenedURL[] }>(`/categories/${categoryId}`, {
+      method: "GET",
+    });
+  }
+
+  /**
+   * Add categories to a URL
+   *
+   * POST /shorten/:shortCode/categories
+   *
+   * @param shortCode - The short code of the URL
+   * @param categoryIds - Array of category IDs to add
+   * @returns Promise that resolves when added
+   */
+  async addCategoriesToURL(shortCode: string, categoryIds: string[]): Promise<void> {
+    await this.request<{ success: boolean }>(`/shorten/${shortCode}/categories`, {
+      method: "POST",
+      body: JSON.stringify({ categoryIds }),
+    });
+  }
+
+  /**
+   * Remove categories from a URL
+   *
+   * DELETE /shorten/:shortCode/categories
+   *
+   * @param shortCode - The short code of the URL
+   * @param categoryIds - Array of category IDs to remove
+   * @returns Promise that resolves when removed
+   */
+  async removeCategoriesFromURL(shortCode: string, categoryIds: string[]): Promise<void> {
+    await this.request<{ success: boolean }>(`/shorten/${shortCode}/categories`, {
+      method: "DELETE",
+      body: JSON.stringify({ categoryIds }),
+    });
   }
 }
 

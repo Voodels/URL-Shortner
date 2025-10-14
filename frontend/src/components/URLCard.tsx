@@ -1,18 +1,18 @@
 /**
  * URLCard Component - Displays a shortened URL with actions
- * 
+ *
  * DESIGN PATTERNS:
  * 1. Presentational Component: Receives data via props, emits events
  * 2. Compound Component: Multiple sections (info, actions, stats)
  * 3. Optimistic UI: Immediate visual feedback
- * 
+ *
  * FEATURES:
  * - Copy to clipboard functionality
  * - Redirect with analytics tracking
  * - Edit and delete actions
  * - Statistics display
  * - Responsive design
- * 
+ *
  * ACCESSIBILITY:
  * - Semantic HTML
  * - ARIA labels for icon buttons
@@ -20,9 +20,9 @@
  * - Focus management
  */
 
-import { useState } from "react";
-import { api, APIError } from "../api";
+import { useEffect, useState } from "react";
 import type { ShortenedURL } from "../api";
+import { api, APIError } from "../api";
 
 // ============================================================================
 // COMPONENT PROPS
@@ -59,7 +59,7 @@ interface URLCardProps {
 
 /**
  * Card component displaying shortened URL with actions
- * 
+ *
  * STATE MANAGEMENT:
  * - copied: Clipboard copy feedback
  * - loading: Action in progress
@@ -99,6 +99,37 @@ export function URLCard({ url, onEdit, onDelete, onUpdate }: URLCardProps) {
   const [stats, setStats] = useState<ShortenedURL | null>(null);
 
   // ============================================================================
+  // EFFECTS
+  // ============================================================================
+
+  /**
+   * REAL-TIME STATS POLLING
+   * Polls the backend every 5 seconds to get updated click counts
+   * Only polls when stats panel is open
+   */
+  useEffect(() => {
+    if (!showStats) return;
+
+    // Fetch stats immediately when panel opens
+    const fetchStats = async () => {
+      try {
+        const updated = await api.getStats(url.shortCode);
+        setStats(updated);
+        onUpdate(updated); // Update parent's list too
+      } catch (err) {
+        console.error("Failed to fetch stats:", err);
+      }
+    };
+
+    fetchStats();
+
+    // Poll every 5 seconds
+    const interval = setInterval(fetchStats, 5000);
+
+    return () => clearInterval(interval);
+  }, [showStats, url.shortCode, onUpdate]);
+
+  // ============================================================================
   // COMPUTED VALUES
   // ============================================================================
 
@@ -128,7 +159,7 @@ export function URLCard({ url, onEdit, onDelete, onUpdate }: URLCardProps) {
 
   /**
    * Copy short URL to clipboard
-   * 
+   *
    * MODERN API: Uses navigator.clipboard (requires HTTPS in production)
    * FALLBACK: Could add document.execCommand fallback for older browsers
    * UX: Shows visual feedback
@@ -148,12 +179,12 @@ export function URLCard({ url, onEdit, onDelete, onUpdate }: URLCardProps) {
 
   /**
    * Redirect to original URL and track analytics
-   * 
+   *
    * FLOW:
    * 1. Increment access counter (async)
    * 2. Open original URL in new tab
    * 3. Fetch updated stats
-   * 
+   *
    * DESIGN DECISION: Open in new tab vs same tab
    * WHY: Keeps app open, allows multiple redirects
    * ALTERNATIVE: window.location.href for same tab
@@ -197,7 +228,7 @@ export function URLCard({ url, onEdit, onDelete, onUpdate }: URLCardProps) {
 
   /**
    * Delete shortened URL
-   * 
+   *
    * CONFIRMATION: Could add confirmation dialog
    * OPTIMISTIC UI: Immediately notify parent to remove from list
    * ERROR HANDLING: Could restore on error
@@ -211,7 +242,7 @@ export function URLCard({ url, onEdit, onDelete, onUpdate }: URLCardProps) {
 
     try {
       await api.deleteURL(url.shortCode);
-      
+
       // Notify parent to remove from list
       onDelete(url.shortCode);
     } catch (err) {
@@ -227,7 +258,7 @@ export function URLCard({ url, onEdit, onDelete, onUpdate }: URLCardProps) {
 
   /**
    * Toggle statistics display
-   * 
+   *
    * LAZY LOADING: Fetch stats only when opened for first time
    * CACHING: Store stats in state to avoid refetching
    */
@@ -252,11 +283,24 @@ export function URLCard({ url, onEdit, onDelete, onUpdate }: URLCardProps) {
   };
 
   // ============================================================================
+  // DRAG AND DROP HANDLERS
+  // ============================================================================
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = "copy";
+    e.dataTransfer.setData("text/plain", url.shortCode);
+  };
+
+  // ============================================================================
   // RENDER
   // ============================================================================
 
   return (
-    <div className="card bg-base-100 shadow-xl">
+    <div
+      className="card bg-base-100 shadow-xl cursor-move hover:shadow-2xl transition-shadow"
+      draggable={true}
+      onDragStart={handleDragStart}
+    >
       <div className="card-body">
         {/* HEADER: Short URL and actions */}
         <div className="flex justify-between items-start gap-4">
@@ -265,7 +309,7 @@ export function URLCard({ url, onEdit, onDelete, onUpdate }: URLCardProps) {
             <h3 className="card-title text-primary break-all">
               {url.shortCode}
             </h3>
-            
+
             {/* ORIGINAL URL */}
             <p className="text-sm text-base-content/70 break-all mt-1">
               {url.url}

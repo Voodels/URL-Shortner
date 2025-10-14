@@ -59,6 +59,72 @@ CREATE TABLE urls (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
+-- Categories Table
+-- ============================================================================
+
+CREATE TABLE categories (
+  -- Primary key: UUID for globally unique identifier
+  id CHAR(36) PRIMARY KEY,
+
+  -- Category name
+  name VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+
+  -- Category description (optional)
+  description VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+
+  -- Icon/emoji for visual identification
+  icon VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '📁',
+
+  -- Color theme for the category
+  color VARCHAR(50) DEFAULT 'primary',
+
+  -- Owner of the category
+  user_id CHAR(36) NOT NULL,
+
+  -- Timestamps for auditing
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  -- Indexes for performance
+  INDEX idx_user_id (user_id),
+  INDEX idx_name (name),
+
+  -- Unique constraint: user can't have duplicate category names
+  UNIQUE KEY unique_user_category (user_id, name),
+
+  CONSTRAINT fk_categories_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- URL-Category Junction Table (Many-to-Many Relationship)
+-- ============================================================================
+
+CREATE TABLE url_categories (
+  -- Composite primary key
+  url_id CHAR(36) NOT NULL,
+  category_id CHAR(36) NOT NULL,
+
+  -- Timestamp for when the URL was added to this category
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (url_id, category_id),
+
+  -- Indexes for performance
+  INDEX idx_url_id (url_id),
+  INDEX idx_category_id (category_id),
+
+  CONSTRAINT fk_url_categories_url
+    FOREIGN KEY (url_id) REFERENCES urls(id)
+    ON DELETE CASCADE,
+
+  CONSTRAINT fk_url_categories_category
+    FOREIGN KEY (category_id) REFERENCES categories(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
 -- Sample Data (Optional - for testing)
 -- ============================================================================
 

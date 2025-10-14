@@ -12,11 +12,13 @@
 
 import {
     createMySQLRepositories,
+    MySQLCategoryRepository,
     MySQLURLRepository,
     MySQLUserRepository,
 } from "./mysql-store.ts";
-import type { URLRepository, UserRepository } from "./store.ts";
+import type { CategoryRepository, URLRepository, UserRepository } from "./store.ts";
 import {
+    categoryRepository as inMemoryCategoryRepository,
     urlRepository as inMemoryRepository,
     userRepository as inMemoryUserRepository,
 } from "./store.ts";
@@ -70,8 +72,10 @@ export function getDatabaseConfig(): DBConfig {
  */
 let repositoryInstance: URLRepository | null = null;
 let userRepositoryInstance: UserRepository | null = null;
+let categoryRepositoryInstance: CategoryRepository | null = null;
 let mysqlInstance: MySQLURLRepository | null = null;
 let mysqlUserInstance: MySQLUserRepository | null = null;
+let mysqlCategoryInstance: MySQLCategoryRepository | null = null;
 
 /**
  * Initialize and return the URL repository based on configuration
@@ -97,12 +101,14 @@ export async function initializeRepository(): Promise<URLRepository> {
 
     // Create and connect to MySQL
     const mysqlConfig = config.mysql;
-    const { urlRepository, userRepository } = await createMySQLRepositories(mysqlConfig);
+    const { urlRepository, userRepository, categoryRepository } = await createMySQLRepositories(mysqlConfig);
 
     mysqlInstance = urlRepository;
     mysqlUserInstance = userRepository;
+    mysqlCategoryInstance = categoryRepository;
     repositoryInstance = urlRepository;
     userRepositoryInstance = userRepository;
+    categoryRepositoryInstance = categoryRepository;
 
     const { hostname, port, database } = mysqlConfig;
     console.log(`✅ MySQL repository initialized (host=${hostname}:${port}, db=${database})`);
@@ -110,6 +116,7 @@ export async function initializeRepository(): Promise<URLRepository> {
     // Use in-memory repository
     repositoryInstance = inMemoryRepository;
     userRepositoryInstance = inMemoryUserRepository;
+    categoryRepositoryInstance = inMemoryCategoryRepository;
     console.log("✅ In-memory repository initialized");
   }
 
@@ -138,6 +145,13 @@ export function getUserRepository(): UserRepository {
   return userRepositoryInstance;
 }
 
+export function getCategoryRepository(): CategoryRepository {
+  if (!categoryRepositoryInstance) {
+    throw new Error("Category repository not initialized. Call initializeRepository() first.");
+  }
+  return categoryRepositoryInstance;
+}
+
 /**
  * Close database connections (for graceful shutdown)
  *
@@ -151,7 +165,11 @@ export async function closeDatabase(): Promise<void> {
   if (mysqlUserInstance) {
     mysqlUserInstance = null;
   }
+  if (mysqlCategoryInstance) {
+    mysqlCategoryInstance = null;
+  }
   repositoryInstance = null;
   userRepositoryInstance = null;
+  categoryRepositoryInstance = null;
   console.log("✅ Database connections closed");
 }

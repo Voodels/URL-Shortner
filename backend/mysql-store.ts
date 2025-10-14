@@ -16,7 +16,7 @@
  */
 
 import { Client } from "https://deno.land/x/mysql@v2.12.1/mod.ts";
-import { type URLRepository, type UserRepository } from "./store.ts";
+import { type CategoryRepository, type URLRepository, type UserRepository } from "./store.ts";
 import { NotFoundError, type ShortenedURL, type User } from "./types.ts";
 
 const denoRuntime = (globalThis as { Deno?: any }).Deno;
@@ -91,6 +91,7 @@ export class MySQLURLRepository implements URLRepository {
         password: this.config.password,
         db: this.config.database,
         poolSize: this.config.poolSize || 10, // Default 10 connections
+        charset: "utf8mb4", // Support emojis and special characters
       });
       console.log("✅ Connected to MySQL database");
     } catch (error) {
@@ -448,6 +449,97 @@ export class MySQLURLRepository implements URLRepository {
     }
   }
 
+  async getURLsByCategory(categoryId: string, userId: string): Promise<ShortenedURL[]> {
+    try {
+      const query = `
+        SELECT u.id, u.url, u.short_code as shortCode, u.user_id as userId,
+               u.created_at as createdAt, u.updated_at as updatedAt, u.access_count as accessCount
+        FROM urls u
+        INNER JOIN url_categories uc ON u.id = uc.url_id
+        WHERE uc.category_id = ? AND u.user_id = ?
+        ORDER BY u.created_at DESC
+      `;
+
+      const result = await this.client.execute(query, [categoryId, userId]);
+
+      if (!result.rows) {
+        return [];
+      }
+
+      return result.rows.map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        url: row.url as string,
+        shortCode: row.shortCode as string,
+        userId: (row.userId as string | null) ?? undefined,
+        createdAt: (row.createdAt as Date).toISOString(),
+        updatedAt: (row.updatedAt as Date).toISOString(),
+        accessCount: row.accessCount as number,
+      }));
+    } catch (error) {
+      console.error("GetURLsByCategory error:", error);
+      throw error;
+    }
+  }
+
+  async addCategoriesToURL(urlId: string, categoryIds: string[]): Promise<void> {
+    if (categoryIds.length === 0) return;
+
+    try {
+      const values = categoryIds.map(categoryId => `('${urlId}', '${categoryId}')`).join(',');
+      const query = `INSERT IGNORE INTO url_categories (url_id, category_id) VALUES ${values}`;
+      await this.client.execute(query);
+    } catch (error) {
+      console.error("AddCategoriesToURL error:", error);
+      throw error;
+    }
+  }
+
+  async removeCategoriesFromURL(urlId: string, categoryIds: string[]): Promise<void> {
+    if (categoryIds.length === 0) return;
+
+    try {
+      const placeholders = categoryIds.map(() => '?').join(',');
+      const query = `DELETE FROM url_categories WHERE url_id = ? AND category_id IN (${placeholders})`;
+      await this.client.execute(query, [urlId, ...categoryIds]);
+    } catch (error) {
+      console.error("RemoveCategoriesFromURL error:", error);
+      throw error;
+    }
+  }
+
+  async getCategoriesForURL(urlId: string): Promise<import("./types.ts").Category[]> {
+    try {
+      const query = `
+        SELECT c.id, c.name, c.description, c.icon, c.color, c.user_id as userId,
+               c.created_at as createdAt, c.updated_at as updatedAt
+        FROM categories c
+        INNER JOIN url_categories uc ON c.id = uc.category_id
+        WHERE uc.url_id = ?
+        ORDER BY c.name ASC
+      `;
+
+      const result = await this.client.execute(query, [urlId]);
+
+      if (!result.rows) {
+        return [];
+      }
+
+      return result.rows.map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        name: row.name as string,
+        description: (row.description as string | null) ?? undefined,
+        icon: row.icon as string,
+        color: row.color as string,
+        userId: row.userId as string,
+        createdAt: (row.createdAt as Date).toISOString(),
+        updatedAt: (row.updatedAt as Date).toISOString(),
+      }));
+    } catch (error) {
+      console.error("GetCategoriesForURL error:", error);
+      throw error;
+    }
+  }
+
   getClient(): Client {
     return this.client;
   }
@@ -525,6 +617,149 @@ export class MySQLUserRepository implements UserRepository {
   }
 }
 
+export class MySQLCategoryRepository implements CategoryRepository {
+  constructor(private readonly client: Client) {}
+
+  private mapRowToCategory(row: Record<string, unknown>): import("./types.ts").Category {
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      description: (row.description as string | null) ?? undefined,
+      icon: row.icon as string,
+      color: row.color as string,
+      userId: row.userId as string,
+      createdAt: (row.createdAt as Date).toISOString(),
+      updatedAt: (row.updatedAt as Date).toISOString(),
+    };
+  }
+
+  async create(category: import("./types.ts").Category): Promise<import("./types.ts").Category> {
+    const createdAt = toValidDate(category.createdAt, "createdAt");
+    const updatedAt = toValidDate(category.updatedAt, "updatedAt");
+
+    const query = `
+      INSERT INTO categories (id, name, description, icon, color, user_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    await this.client.execute(query, [
+      category.id,
+      category.name,
+      category.description ?? null,
+      category.icon,
+      category.color,
+      category.userId,
+      createdAt,
+      updatedAt,
+    ]);
+
+    return category;
+  }
+
+  async findById(id: string): Promise<import("./types.ts").Category | null> {
+    const query = `
+      SELECT id, name, description, icon, color, user_id as userId,
+             created_at as createdAt, updated_at as updatedAt
+      FROM categories
+      WHERE id = ?
+    `;
+
+    const result = await this.client.execute(query, [id]);
+
+    if (!result.rows || result.rows.length === 0) {
+      return null;
+    }
+
+    return this.mapRowToCategory(result.rows[0] as Record<string, unknown>);
+  }
+
+  async findByName(userId: string, name: string): Promise<import("./types.ts").Category | null> {
+    const query = `
+      SELECT id, name, description, icon, color, user_id as userId,
+             created_at as createdAt, updated_at as updatedAt
+      FROM categories
+      WHERE user_id = ? AND name = ?
+    `;
+
+    const result = await this.client.execute(query, [userId, name]);
+
+    if (!result.rows || result.rows.length === 0) {
+      return null;
+    }
+
+    return this.mapRowToCategory(result.rows[0] as Record<string, unknown>);
+  }
+
+  async update(id: string, category: import("./types.ts").Category): Promise<import("./types.ts").Category> {
+    const updatedAt = toValidDate(category.updatedAt, "updatedAt");
+
+    const query = `
+      UPDATE categories
+      SET name = ?, description = ?, icon = ?, color = ?, updated_at = ?
+      WHERE id = ?
+    `;
+
+    await this.client.execute(query, [
+      category.name,
+      category.description ?? null,
+      category.icon,
+      category.color,
+      updatedAt,
+      id,
+    ]);
+
+    return category;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const query = `DELETE FROM categories WHERE id = ?`;
+    const result = await this.client.execute(query, [id]);
+    return (result.affectedRows ?? 0) > 0;
+  }
+
+  async getAllByUser(userId: string): Promise<import("./types.ts").Category[]> {
+    const query = `
+      SELECT id, name, description, icon, color, user_id as userId,
+             created_at as createdAt, updated_at as updatedAt
+      FROM categories
+      WHERE user_id = ?
+      ORDER BY name ASC
+    `;
+
+    const result = await this.client.execute(query, [userId]);
+
+    if (!result.rows) {
+      return [];
+    }
+
+    return result.rows.map((row: Record<string, unknown>) => this.mapRowToCategory(row));
+  }
+
+  async getAllByUserWithCount(userId: string): Promise<import("./types.ts").CategoryWithCount[]> {
+    const query = `
+      SELECT c.id, c.name, c.description, c.icon, c.color, c.user_id as userId,
+             c.created_at as createdAt, c.updated_at as updatedAt,
+             COUNT(uc.url_id) as urlCount
+      FROM categories c
+      LEFT JOIN url_categories uc ON c.id = uc.category_id
+      WHERE c.user_id = ?
+      GROUP BY c.id
+      ORDER BY c.name ASC
+    `;
+
+    const result = await this.client.execute(query, [userId]);
+
+    if (!result.rows) {
+      return [];
+    }
+
+    return result.rows.map((row: Record<string, unknown>) => ({
+      ...this.mapRowToCategory(row),
+      urlCount: Number(row.urlCount) || 0,
+    }));
+  }
+}
+
 /**
  * Create repository instance from environment variables
  *
@@ -551,9 +786,11 @@ export function createMySQLRepository(configOverride?: DatabaseConfig): MySQLURL
 export async function createMySQLRepositories(configOverride?: DatabaseConfig): Promise<{
   urlRepository: MySQLURLRepository;
   userRepository: MySQLUserRepository;
+  categoryRepository: MySQLCategoryRepository;
 }> {
   const urlRepository = createMySQLRepository(configOverride);
   await urlRepository.connect();
   const userRepository = new MySQLUserRepository(urlRepository.getClient());
-  return { urlRepository, userRepository };
+  const categoryRepository = new MySQLCategoryRepository(urlRepository.getClient());
+  return { urlRepository, userRepository, categoryRepository };
 }
