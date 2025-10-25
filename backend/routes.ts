@@ -22,31 +22,32 @@
  */
 
 import {
-  ensureAuthHeader,
-  generateAuthToken,
-  hashPassword,
-  toPublicUser,
-  verifyPassword,
+    ensureAuthHeader,
+    generateAuthToken,
+    hashPassword,
+    toPublicUser,
+    verifyPassword,
 } from "./auth-service.ts";
 import { getCategoryRepository, getRepository, getUserRepository } from "./database.ts";
 import type {
-  AuthCredentials,
-  AuthResponse,
-  Category,
-  CreateCategoryRequest,
-  ShortenedURL,
-  UpdateCategoryRequest,
-  User
+    AuthCredentials,
+    AuthResponse,
+    Category,
+    CreateCategoryRequest,
+    ShortenedURL,
+    UpdateCategoryRequest,
+    User
 } from "./types.ts";
 import {
-  AuthenticationError,
-  AuthorizationError,
-  NotFoundError,
-  ValidationError,
-  validateAuthCredentials,
-  validateCreateURLRequest,
-  validateUpdateURLRequest,
-  type ErrorResponse,
+    AuthenticationError,
+    AuthorizationError,
+    DatabaseError,
+    NotFoundError,
+    ValidationError,
+    validateAuthCredentials,
+    validateCreateURLRequest,
+    validateUpdateURLRequest,
+    type ErrorResponse,
 } from "./types.ts";
 
 async function requireUser(req: Request): Promise<User> {
@@ -927,6 +928,19 @@ function handleError(error: unknown): Response {
 
     return new Response(JSON.stringify(errorResponse), {
       status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (error instanceof DatabaseError) {
+    const errorResponse: ErrorResponse = {
+      error: error.message,
+      code: "DATABASE_ERROR",
+      details: error.details,
+    };
+
+    return new Response(JSON.stringify(errorResponse), {
+      status: 503,
       headers: { "Content-Type": "application/json" },
     });
   }

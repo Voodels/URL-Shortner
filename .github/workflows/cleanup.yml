@@ -1,0 +1,41 @@
+# ============================================================================
+# GitHub Actions - Docker Image Cleanup
+# ============================================================================
+#
+# PURPOSE: Remove old Docker images to save storage
+#
+# SCHEDULE: Weekly cleanup of old images
+#
+# ============================================================================
+
+name: Cleanup Old Images
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday at midnight
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    name: Delete Old Images
+    runs-on: ubuntu-latest
+
+    permissions:
+      packages: write
+
+    steps:
+      - name: Delete old backend images
+        uses: actions/delete-package-versions@v4
+        with:
+          package-name: '${{ github.event.repository.name }}-backend'
+          package-type: 'container'
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: 'true'
+
+      - name: Delete old frontend images
+        uses: actions/delete-package-versions@v4
+        with:
+          package-name: '${{ github.event.repository.name }}-frontend'
+          package-type: 'container'
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: 'true'

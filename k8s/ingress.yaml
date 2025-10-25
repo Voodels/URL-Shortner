@@ -1,0 +1,75 @@
+# ============================================================================
+# Kubernetes Ingress - HTTP/HTTPS Routing
+# ============================================================================
+# Requires an ingress controller (nginx, traefik, etc.)
+# ============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: urlshortener-ingress
+  labels:
+    app: urlshortener
+  annotations:
+    # Nginx Ingress Controller annotations
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+
+    # CORS (if not handled by backend)
+    # nginx.ingress.kubernetes.io/enable-cors: "true"
+    # nginx.ingress.kubernetes.io/cors-allow-origin: "https://yourdomain.com"
+
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+
+spec:
+  tls:
+  - hosts:
+    - yourdomain.com
+    - www.yourdomain.com
+    - api.yourdomain.com
+    secretName: urlshortener-tls
+
+  rules:
+  # Frontend
+  - host: yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: urlshortener-frontend
+            port:
+              number: 80
+
+  - host: www.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: urlshortener-frontend
+            port:
+              number: 80
+
+  # Backend API
+  - host: api.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: urlshortener-backend
+            port:
+              number: 8000

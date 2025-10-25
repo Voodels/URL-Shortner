@@ -1,0 +1,69 @@
+# ============================================================================
+# Backend Dockerfile - Production-Ready Deno Application
+# ============================================================================
+#
+# MULTI-STAGE BUILD:
+# 1. Base: Common dependencies
+# 2. Development: For local development with hot reload
+# 3. Production: Optimized minimal image
+#
+# USAGE:
+#   docker build -f Dockerfile.backend -t urlshortener-backend:latest .
+#   docker run -p 8000:8000 urlshortener-backend:latest
+#
+# ============================================================================
+
+# ============================================================================
+# Stage 1: Base Image
+# ============================================================================
+FROM denoland/deno:1.45.5 AS base
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files
+COPY deno.json .
+COPY backend/ ./backend/
+
+# Cache dependencies
+RUN deno cache backend/server.ts
+
+# ============================================================================
+# Stage 2: Development
+# ============================================================================
+FROM base AS development
+
+# Environment
+ENV DENO_ENV=development
+ENV PORT=8000
+
+# Expose port
+EXPOSE 8000
+
+# Development command with watch mode
+CMD ["deno", "run", "--watch", "--allow-net", "--allow-env", "--allow-read", "backend/server.ts"]
+
+# ============================================================================
+# Stage 3: Production
+# ============================================================================
+FROM denoland/deno:distroless-1.45.5 AS production
+
+# Set working directory
+WORKDIR /app
+
+# Copy from base stage
+COPY --from=base /app /app
+
+# Environment
+ENV DENO_ENV=production
+ENV PORT=8000
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["/deno", "eval", "fetch('http://localhost:8000/health').then(r => r.ok ? Deno.exit(0) : Deno.exit(1))"]
+
+# Production command - distroless image already has /bin/deno as entrypoint
+CMD ["run", "--allow-net", "--allow-env", "--allow-read", "backend/server.ts"]

@@ -73,7 +73,7 @@ CREATE TABLE categories (
   description VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
 
   -- Icon/emoji for visual identification
-  icon VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '📁',
+  icon VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'folder',
 
   -- Color theme for the category
   color VARCHAR(50) DEFAULT 'primary',

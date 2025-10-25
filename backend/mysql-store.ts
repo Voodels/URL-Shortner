@@ -17,9 +17,31 @@
 
 import { Client } from "https://deno.land/x/mysql@v2.12.1/mod.ts";
 import { type CategoryRepository, type URLRepository, type UserRepository } from "./store.ts";
-import { NotFoundError, type ShortenedURL, type User } from "./types.ts";
+import { DatabaseError, NotFoundError, type ShortenedURL, type User } from "./types.ts";
 
 const denoRuntime = (globalThis as { Deno?: any }).Deno;
+
+function isAccessDenied(message: string): boolean {
+  return message.toLowerCase().includes("access denied for user");
+}
+
+function throwDatabaseError(operation: string, error: unknown): never {
+  console.error(`MySQL ${operation} error:`, error);
+
+  if (error instanceof Error && isAccessDenied(error.message)) {
+    throw new DatabaseError(
+      "Database authentication failed",
+      [
+        "MySQL rejected the configured credentials.",
+        "Verify DB_USER and DB_PASSWORD environment variables.",
+        `Server message: ${error.message}`,
+      ],
+    );
+  }
+
+  const defaultMessage = describeError(error);
+  throw new DatabaseError(`MySQL ${operation} operation failed`, [defaultMessage]);
+}
 
 function describeError(error: unknown): string {
   if (error instanceof Error) {
@@ -95,9 +117,7 @@ export class MySQLURLRepository implements URLRepository {
       });
       console.log("✅ Connected to MySQL database");
     } catch (error) {
-      const message = describeError(error);
-      console.error("❌ Failed to connect to MySQL:", error);
-      throw new Error(`Database connection failed: ${message}`);
+      throwDatabaseError("connect", error);
     }
   }
 
@@ -146,8 +166,7 @@ export class MySQLURLRepository implements URLRepository {
       if (error instanceof Error && error.message?.includes("Duplicate entry")) {
         throw new Error(`Short code '${url.shortCode}' already exists`);
       }
-      console.error("Create error:", error);
-      throw error;
+      throwDatabaseError("create url", error);
     }
   }
 
@@ -188,8 +207,7 @@ export class MySQLURLRepository implements URLRepository {
 
       return null;
     } catch (error) {
-      console.error("FindByShortCode error:", error);
-      throw error;
+      throwDatabaseError("findByShortCode", error);
     }
   }
 
@@ -230,8 +248,7 @@ export class MySQLURLRepository implements URLRepository {
 
       return null;
     } catch (error) {
-      console.error("FindById error:", error);
-      throw error;
+      throwDatabaseError("findById", error);
     }
   }
 
@@ -248,7 +265,7 @@ export class MySQLURLRepository implements URLRepository {
    */
   async update(
     shortCode: string,
-    updates: Partial<ShortenedURL>
+    url: ShortenedURL
   ): Promise<ShortenedURL> {
     try {
       // First, check if URL exists
@@ -264,29 +281,19 @@ export class MySQLURLRepository implements URLRepository {
         WHERE short_code = ?
       `;
 
-      const updatedAt = updates.updatedAt
-        ? toValidDate(updates.updatedAt, "updatedAt")
-        : new Date();
-
       await this.client.execute(query, [
-        updates.url || existing.url,
-        updatedAt,
+        url.url,
+        toValidDate(url.updatedAt, "updatedAt"),
         shortCode,
       ]);
 
       // Return updated URL
-      const updated = await this.findByShortCode(shortCode);
-      if (!updated) {
-        throw new Error("Failed to retrieve updated URL");
-      }
-
-      return updated;
+      return (await this.findByShortCode(shortCode)) ?? existing;
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw error;
       }
-      console.error("Update error:", error);
-      throw error;
+      throwDatabaseError("update url", error);
     }
   }
 
@@ -319,8 +326,7 @@ export class MySQLURLRepository implements URLRepository {
       if (error instanceof NotFoundError) {
         throw error;
       }
-      console.error("Delete error:", error);
-      throw error;
+      throwDatabaseError("delete url", error);
     }
   }
 
@@ -374,8 +380,7 @@ export class MySQLURLRepository implements URLRepository {
 
       return false;
     } catch (error) {
-      console.error("ShortCodeExists error:", error);
-      throw error;
+      throwDatabaseError("shortCodeExists", error);
     }
   }
 
@@ -413,8 +418,7 @@ export class MySQLURLRepository implements URLRepository {
         accessCount: row.accessCount as number,
       }));
     } catch (error) {
-      console.error("GetAll error:", error);
-      throw error;
+      throwDatabaseError("getAll", error);
     }
   }
 
@@ -444,8 +448,7 @@ export class MySQLURLRepository implements URLRepository {
         accessCount: row.accessCount as number,
       }));
     } catch (error) {
-      console.error("GetAllByUser error:", error);
-      throw error;
+      throwDatabaseError("getAllByUser", error);
     }
   }
 
@@ -476,8 +479,7 @@ export class MySQLURLRepository implements URLRepository {
         accessCount: row.accessCount as number,
       }));
     } catch (error) {
-      console.error("GetURLsByCategory error:", error);
-      throw error;
+      throwDatabaseError("getURLsByCategory", error);
     }
   }
 
@@ -489,8 +491,7 @@ export class MySQLURLRepository implements URLRepository {
       const query = `INSERT IGNORE INTO url_categories (url_id, category_id) VALUES ${values}`;
       await this.client.execute(query);
     } catch (error) {
-      console.error("AddCategoriesToURL error:", error);
-      throw error;
+      throwDatabaseError("addCategoriesToURL", error);
     }
   }
 
@@ -502,8 +503,7 @@ export class MySQLURLRepository implements URLRepository {
       const query = `DELETE FROM url_categories WHERE url_id = ? AND category_id IN (${placeholders})`;
       await this.client.execute(query, [urlId, ...categoryIds]);
     } catch (error) {
-      console.error("RemoveCategoriesFromURL error:", error);
-      throw error;
+      throwDatabaseError("removeCategoriesFromURL", error);
     }
   }
 
@@ -535,8 +535,7 @@ export class MySQLURLRepository implements URLRepository {
         updatedAt: (row.updatedAt as Date).toISOString(),
       }));
     } catch (error) {
-      console.error("GetCategoriesForURL error:", error);
-      throw error;
+      throwDatabaseError("getCategoriesForURL", error);
     }
   }
 
@@ -567,15 +566,18 @@ export class MySQLUserRepository implements UserRepository {
       VALUES (?, ?, ?, ?, ?)
     `;
 
-    await this.client.execute(query, [
-      user.id,
-      user.email,
-      user.passwordHash,
-      createdAt,
-      updatedAt,
-    ]);
-
-    return user;
+    try {
+      await this.client.execute(query, [
+        user.id,
+        user.email,
+        user.passwordHash,
+        createdAt,
+        updatedAt,
+      ]);
+      return user;
+    } catch (error) {
+      throwDatabaseError("create user", error);
+    }
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -587,14 +589,18 @@ export class MySQLUserRepository implements UserRepository {
       LIMIT 1
     `;
 
-    const result = await this.client.execute(query, [email]);
+    try {
+      const result = await this.client.execute(query, [email]);
 
-    if (!result.rows || result.rows.length === 0) {
-      return null;
+      if (!result.rows || result.rows.length === 0) {
+        return null;
+      }
+
+      const row = result.rows[0] as Record<string, unknown>;
+      return this.mapRowToUser(row);
+    } catch (error) {
+      throwDatabaseError("findUserByEmail", error);
     }
-
-    const row = result.rows[0] as Record<string, unknown>;
-    return this.mapRowToUser(row);
   }
 
   async findById(id: string): Promise<User | null> {
@@ -606,14 +612,18 @@ export class MySQLUserRepository implements UserRepository {
       LIMIT 1
     `;
 
-    const result = await this.client.execute(query, [id]);
+    try {
+      const result = await this.client.execute(query, [id]);
 
-    if (!result.rows || result.rows.length === 0) {
-      return null;
+      if (!result.rows || result.rows.length === 0) {
+        return null;
+      }
+
+      const row = result.rows[0] as Record<string, unknown>;
+      return this.mapRowToUser(row);
+    } catch (error) {
+      throwDatabaseError("findUserById", error);
     }
-
-    const row = result.rows[0] as Record<string, unknown>;
-    return this.mapRowToUser(row);
   }
 }
 
@@ -642,18 +652,22 @@ export class MySQLCategoryRepository implements CategoryRepository {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    await this.client.execute(query, [
-      category.id,
-      category.name,
-      category.description ?? null,
-      category.icon,
-      category.color,
-      category.userId,
-      createdAt,
-      updatedAt,
-    ]);
+    try {
+      await this.client.execute(query, [
+        category.id,
+        category.name,
+        category.description ?? null,
+        category.icon,
+        category.color,
+        category.userId,
+        createdAt,
+        updatedAt,
+      ]);
 
-    return category;
+      return category;
+    } catch (error) {
+      throwDatabaseError("create category", error);
+    }
   }
 
   async findById(id: string): Promise<import("./types.ts").Category | null> {
@@ -664,30 +678,39 @@ export class MySQLCategoryRepository implements CategoryRepository {
       WHERE id = ?
     `;
 
-    const result = await this.client.execute(query, [id]);
+    try {
+      const result = await this.client.execute(query, [id]);
 
-    if (!result.rows || result.rows.length === 0) {
-      return null;
+      if (!result.rows || result.rows.length === 0) {
+        return null;
+      }
+
+      return this.mapRowToCategory(result.rows[0] as Record<string, unknown>);
+    } catch (error) {
+      throwDatabaseError("findCategoryById", error);
     }
-
-    return this.mapRowToCategory(result.rows[0] as Record<string, unknown>);
   }
 
   async findByName(userId: string, name: string): Promise<import("./types.ts").Category | null> {
     const query = `
       SELECT id, name, description, icon, color, user_id as userId,
              created_at as createdAt, updated_at as updatedAt
-      FROM categories
-      WHERE user_id = ? AND name = ?
+    FROM categories
+    WHERE user_id = ? AND LOWER(name) = LOWER(?)
+    LIMIT 1
     `;
 
-    const result = await this.client.execute(query, [userId, name]);
+    try {
+      const result = await this.client.execute(query, [userId, name]);
 
-    if (!result.rows || result.rows.length === 0) {
-      return null;
+      if (!result.rows || result.rows.length === 0) {
+        return null;
+      }
+
+      return this.mapRowToCategory(result.rows[0] as Record<string, unknown>);
+    } catch (error) {
+      throwDatabaseError("findCategoryByName", error);
     }
-
-    return this.mapRowToCategory(result.rows[0] as Record<string, unknown>);
   }
 
   async update(id: string, category: import("./types.ts").Category): Promise<import("./types.ts").Category> {
@@ -699,22 +722,30 @@ export class MySQLCategoryRepository implements CategoryRepository {
       WHERE id = ?
     `;
 
-    await this.client.execute(query, [
-      category.name,
-      category.description ?? null,
-      category.icon,
-      category.color,
-      updatedAt,
-      id,
-    ]);
+    try {
+      await this.client.execute(query, [
+        category.name,
+        category.description ?? null,
+        category.icon,
+        category.color,
+        updatedAt,
+        id,
+      ]);
 
-    return category;
+      return category;
+    } catch (error) {
+      throwDatabaseError("update category", error);
+    }
   }
 
   async delete(id: string): Promise<boolean> {
     const query = `DELETE FROM categories WHERE id = ?`;
-    const result = await this.client.execute(query, [id]);
-    return (result.affectedRows ?? 0) > 0;
+    try {
+      const result = await this.client.execute(query, [id]);
+      return (result.affectedRows ?? 0) > 0;
+    } catch (error) {
+      throwDatabaseError("delete category", error);
+    }
   }
 
   async getAllByUser(userId: string): Promise<import("./types.ts").Category[]> {
@@ -726,13 +757,17 @@ export class MySQLCategoryRepository implements CategoryRepository {
       ORDER BY name ASC
     `;
 
-    const result = await this.client.execute(query, [userId]);
+    try {
+      const result = await this.client.execute(query, [userId]);
 
-    if (!result.rows) {
-      return [];
+      if (!result.rows) {
+        return [];
+      }
+
+      return result.rows.map((row: Record<string, unknown>) => this.mapRowToCategory(row));
+    } catch (error) {
+      throwDatabaseError("getCategoriesByUser", error);
     }
-
-    return result.rows.map((row: Record<string, unknown>) => this.mapRowToCategory(row));
   }
 
   async getAllByUserWithCount(userId: string): Promise<import("./types.ts").CategoryWithCount[]> {
@@ -747,16 +782,20 @@ export class MySQLCategoryRepository implements CategoryRepository {
       ORDER BY c.name ASC
     `;
 
-    const result = await this.client.execute(query, [userId]);
+    try {
+      const result = await this.client.execute(query, [userId]);
 
-    if (!result.rows) {
-      return [];
+      if (!result.rows) {
+        return [];
+      }
+
+      return result.rows.map((row: Record<string, unknown>) => ({
+        ...this.mapRowToCategory(row),
+        urlCount: Number(row.urlCount) || 0,
+      }));
+    } catch (error) {
+      throwDatabaseError("getCategoriesByUserWithCount", error);
     }
-
-    return result.rows.map((row: Record<string, unknown>) => ({
-      ...this.mapRowToCategory(row),
-      urlCount: Number(row.urlCount) || 0,
-    }));
   }
 }
 
@@ -783,6 +822,16 @@ export function createMySQLRepository(configOverride?: DatabaseConfig): MySQLURL
   return new MySQLURLRepository(config);
 }
 
+/**
+ * Factory for MySQL-backed repositories.
+ *
+ * Reads connection settings from the environment, applies any overrides,
+ * creates one shared client instance, and exposes repository instances that
+ * all share the same connection pool. Consumers must call the `connect`
+ * method on whichever repository they receive before issuing queries, and
+ * later call `disconnect` during shutdown so pooled connections close
+ * cleanly.
+ */
 export async function createMySQLRepositories(configOverride?: DatabaseConfig): Promise<{
   urlRepository: MySQLURLRepository;
   userRepository: MySQLUserRepository;

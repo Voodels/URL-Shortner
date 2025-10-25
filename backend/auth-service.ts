@@ -34,6 +34,13 @@ if (!JWT_SECRET) {
 
 let cachedKey: CryptoKey | null = null;
 
+/**
+ * Converts a human-friendly duration string (e.g. "15m", "24h") into seconds.
+ *
+ * @param duration Raw TTL string from configuration.
+ * @returns TTL expressed in whole seconds.
+ * @throws Error when the value cannot be parsed or uses an unsupported unit.
+ */
 function parseDuration(duration: string): number {
   const trimmed = duration.trim();
   const match = trimmed.match(/^(\d+)([smhd])?$/i);
@@ -59,6 +66,11 @@ function parseDuration(duration: string): number {
   }
 }
 
+/**
+ * Lazy-loads and caches the HMAC signing key used for JWT operations.
+ *
+ * @returns CryptoKey ready for signing/verifying tokens.
+ */
 async function getSigningKey(): Promise<CryptoKey> {
   if (cachedKey) {
     return cachedKey;
@@ -76,10 +88,23 @@ async function getSigningKey(): Promise<CryptoKey> {
   return cachedKey;
 }
 
+/**
+ * Hashes a plaintext password using bcrypt.
+ *
+ * @param password Raw password supplied by the user.
+ * @returns Strong bcrypt hash suitable for storage.
+ */
 export async function hashPassword(password: string): Promise<string> {
   return hash(password);
 }
 
+/**
+ * Verifies a plaintext password against an existing bcrypt hash.
+ *
+ * @param password Raw password to verify.
+ * @param passwordHash Stored bcrypt hash from persistence layer.
+ * @returns true when the password matches; false otherwise.
+ */
 export async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
   return compare(password, passwordHash);
 }
@@ -92,6 +117,12 @@ export interface AuthTokenPayload {
   iat: number;
 }
 
+/**
+ * Creates a signed JWT embedding the minimal public user profile.
+ *
+ * @param user Authenticated public-facing user details.
+ * @returns Signed JWT string ready to return to the client.
+ */
 export async function generateAuthToken(user: PublicUser): Promise<string> {
   const key = await getSigningKey();
   const header: Header = { alg: "HS256", typ: "JWT" };
@@ -108,6 +139,13 @@ export async function generateAuthToken(user: PublicUser): Promise<string> {
   return create(header, payload, key);
 }
 
+/**
+ * Confirms the validity of a JWT and extracts its claims.
+ *
+ * @param token Bearer token provided by the client.
+ * @returns Parsed payload with issuer, subject, exp, etc.
+ * @throws AuthenticationError when the token is missing/invalid/expired.
+ */
 export async function verifyAuthToken(token: string): Promise<AuthTokenPayload> {
   try {
     const key = await getSigningKey();
@@ -118,6 +156,12 @@ export async function verifyAuthToken(token: string): Promise<AuthTokenPayload> 
   }
 }
 
+/**
+ * Strips sensitive fields from a User before returning to the client.
+ *
+ * @param user Internal persistence model.
+ * @returns Public representation safe to expose in APIs.
+ */
 export function toPublicUser(user: User): PublicUser {
   return {
     id: user.id,
@@ -127,6 +171,13 @@ export function toPublicUser(user: User): PublicUser {
   };
 }
 
+/**
+ * Extracts and validates the Bearer token from an HTTP request.
+ *
+ * @param req Incoming request (typically from Oak or std/http).
+ * @returns Verified token claims when the header is present and valid.
+ * @throws AuthenticationError if the header is missing or the token fails verification.
+ */
 export async function ensureAuthHeader(req: Request): Promise<AuthTokenPayload> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {

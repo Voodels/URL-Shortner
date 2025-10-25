@@ -1,0 +1,113 @@
+# ============================================================================
+# Kubernetes Deployment - MySQL Database
+# ============================================================================
+# Note: For production, consider using a managed database service
+# (AWS RDS, Google Cloud SQL, Azure Database, etc.)
+# ============================================================================
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: urlshortener-mysql
+  labels:
+    app: urlshortener
+    component: database
+spec:
+  serviceName: urlshortener-mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: urlshortener
+      component: database
+  template:
+    metadata:
+      labels:
+        app: urlshortener
+        component: database
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+          name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: urlshortener-secrets
+              key: mysql_root_password
+        - name: MYSQL_DATABASE
+          value: url_shortener
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: urlshortener-secrets
+              key: db_user
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: urlshortener-secrets
+              key: db_password
+        volumeMounts:
+        - name: mysql-storage
+          mountPath: /var/lib/mysql
+        - name: init-script
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: init-script
+        configMap:
+          name: mysql-init-script
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: urlshortener-mysql
+  labels:
+    app: urlshortener
+    component: database
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - port: 3306
+    targetPort: 3306
+    protocol: TCP
+    name: mysql
+  selector:
+    app: urlshortener
+    component: database

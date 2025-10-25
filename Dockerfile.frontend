@@ -1,0 +1,56 @@
+# ============================================================================
+# Frontend Dockerfile - Production-Ready React + Vite Application
+# ============================================================================
+#
+# MULTI-STAGE BUILD:
+# 1. Builder: Build the React application with Node.js
+# 2. Production: Serve with Nginx
+#
+# USAGE:
+#   docker build -f Dockerfile.frontend -t urlshortener-frontend:latest .
+#   docker run -p 80:80 urlshortener-frontend:latest
+#
+# ============================================================================
+
+# ============================================================================
+# Stage 1: Builder - Build the application with Node.js
+# ============================================================================
+FROM node:20-alpine AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Copy frontend files
+COPY frontend/package.json frontend/package-lock.json* ./
+COPY frontend/ .
+
+# Fix vite.config.ts for Node.js compatibility
+RUN sed -i 's|from "npm:vite@\^5.0.0"|from "vite"|' vite.config.ts && \
+    sed -i 's|from "npm:@vitejs/plugin-react@\^4.2.0"|from "@vitejs/plugin-react"|' vite.config.ts
+
+# Install dependencies
+RUN npm install
+
+# Build the application
+RUN npm run build
+
+# ============================================================================
+# Stage 2: Production - Serve with Nginx
+# ============================================================================
+FROM nginx:alpine AS production
+
+# Copy built assets from builder
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy custom Nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port 80
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost:80/ || exit 1
+
+# Start Nginx
+CMD ["nginx", "-g", "daemon off;"]

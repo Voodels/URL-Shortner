@@ -1,13 +1,15 @@
 # ============================================================================
-# Docker Compose - Development Environment
+# Docker Compose - Production-Ready Configuration
 # ============================================================================
 #
-# PURPOSE: Local development with MySQL database
+# PURPOSE: Production deployment with all services
 # USAGE: docker-compose up -d
 #
 # SERVICES:
 # - mysql: MySQL 8.0 database server
-# - adminer: Web-based database management UI
+# - backend: Deno API server
+# - frontend: React SPA with Nginx
+# - adminer: Web-based database management UI (optional)
 #
 # NETWORKS:
 # - url-shortener-network: Internal network for service communication
@@ -28,16 +30,16 @@ services:
     # Environment variables for MySQL
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: url_shortener
-      MYSQL_USER: urluser
-      MYSQL_PASSWORD: urlpassword
+      MYSQL_DATABASE: urlshortener
+      MYSQL_USER: urlshortener
+      MYSQL_PASSWORD: urlshortener
 
       # Performance tuning
       MYSQL_INITDB_SKIP_TZINFO: 1
 
     # Port mapping: host:container
     ports:
-      - "3306:3306"
+      - "3307:3306"
 
     # Persist data in volume (survives container restart)
     volumes:
@@ -68,14 +70,112 @@ services:
           memory: 512M
 
   # ==========================================================================
-  # Adminer - Database Management UI
+  # Backend API Server
+  # ==========================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: production
+    container_name: urlshortener-backend
+    restart: unless-stopped
+
+    # Environment variables
+    environment:
+      PORT: 8000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: urlshortener
+      DB_PASSWORD: urlshortener
+      DB_NAME: urlshortener
+      JWT_SECRET: hKj9mP3vL8qN2wR5tY6uI1oP4sA7dF0gH3jK6lM9nB2cV5xZ8
+      ALLOWED_ORIGINS: http://localhost,http://localhost:80,http://frontend
+      LOG_REQUESTS: "true"
+      NODE_ENV: production
+
+    # Port mapping
+    ports:
+      - "8000:8000"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "deno", "eval", "fetch('http://localhost:8000/health').then(r => r.ok ? Deno.exit(0) : Deno.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Dependencies
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    # Network
+    networks:
+      - url-shortener-network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ==========================================================================
+  # Frontend React Application
+  # ==========================================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: urlshortener-frontend
+    restart: unless-stopped
+
+    # Port mapping
+    ports:
+      - "80:80"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+    # Dependencies
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    # Network
+    networks:
+      - url-shortener-network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # ==========================================================================
+  # Adminer - Database Management UI (Optional - remove in production)
   # ==========================================================================
   adminer:
     image: adminer:latest
     container_name: urlshortener-adminer
     restart: unless-stopped
+    profiles:
+      - debug  # Only start with: docker-compose --profile debug up
 
-    # Port mapping: access at http://localhost:8081 (changed from 8080 to avoid conflicts)
+    # Port mapping: access at http://localhost:8081
     ports:
       - "8081:8080"
 
@@ -111,8 +211,16 @@ volumes:
 # USAGE INSTRUCTIONS
 # ============================================================================
 #
-# Start services:
+# Production Deployment:
 #   docker-compose up -d
+#
+# Development with Adminer:
+#   docker-compose --profile debug up -d
+#
+# View logs:
+#   docker-compose logs -f
+#   docker-compose logs -f backend
+#   docker-compose logs -f frontend
 #
 # Stop services:
 #   docker-compose down
@@ -120,25 +228,36 @@ volumes:
 # Stop and remove data:
 #   docker-compose down -v
 #
-# View logs:
-#   docker-compose logs -f mysql
+# Rebuild images:
+#   docker-compose build --no-cache
+#   docker-compose up -d --build
 #
 # Connect to MySQL CLI:
 #   docker-compose exec mysql mysql -u urluser -purlpassword url_shortener
 #
-# Access Adminer UI:
-#   http://localhost:8080
+# Access Services:
+#   Frontend:  http://localhost
+#   Backend:   http://localhost:8000
+#   Health:    http://localhost:8000/health
+#   Adminer:   http://localhost:8081 (with --profile debug)
+#
+# Adminer Credentials:
 #   System: MySQL
 #   Server: mysql
 #   Username: urluser
 #   Password: urlpassword
 #   Database: url_shortener
 #
-# Environment variables for your app:
-#   DB_HOST=localhost
-#   DB_PORT=3306
-#   DB_USER=urluser
-#   DB_PASSWORD=urlpassword
-#   DB_NAME=url_shortener
+# Environment Variables:
+#   Configure in docker-compose.yml or use .env file
+#
+# Production Checklist:
+#   ✓ Change MySQL passwords
+#   ✓ Set ALLOWED_ORIGINS to your domain
+#   ✓ Remove adminer service (or keep with profile)
+#   ✓ Configure reverse proxy (Nginx/Traefik)
+#   ✓ Set up SSL/TLS certificates
+#   ✓ Configure backups for mysql_data volume
+#   ✓ Set up monitoring and logging
 #
 # ============================================================================

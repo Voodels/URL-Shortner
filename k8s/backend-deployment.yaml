@@ -1,0 +1,105 @@
+# ============================================================================
+# Kubernetes Deployment - Backend Service
+# ============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: urlshortener-backend
+  labels:
+    app: urlshortener
+    component: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: urlshortener
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: urlshortener
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        image: ghcr.io/voodels/url-shortner-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: PORT
+          value: "8000"
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: urlshortener-config
+              key: db_host
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: urlshortener-config
+              key: db_port
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: urlshortener-config
+              key: db_name
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: urlshortener-secrets
+              key: db_user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: urlshortener-secrets
+              key: db_password
+        - name: ALLOWED_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: urlshortener-config
+              key: allowed_origins
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: urlshortener-backend
+  labels:
+    app: urlshortener
+    component: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: urlshortener
+    component: backend

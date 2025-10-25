@@ -199,6 +199,16 @@ export class AuthorizationError extends Error {
   }
 }
 
+export class DatabaseError extends Error {
+  constructor(
+    message: string,
+    public details?: string[],
+  ) {
+    super(message);
+    this.name = "DatabaseError";
+  }
+}
+
 // ============================================================================
 // VALIDATION UTILITIES
 // ============================================================================

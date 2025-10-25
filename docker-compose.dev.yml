@@ -1,0 +1,140 @@
+# ============================================================================
+# Docker Compose - Development Environment
+# ============================================================================
+#
+# PURPOSE: Local development with hot reload
+# USAGE: docker-compose -f docker-compose.dev.yml up
+#
+# DIFFERENCES FROM PRODUCTION:
+# - Source code mounted as volumes (hot reload)
+# - Development build targets
+# - Debug tools enabled
+# - Port mappings for debugging
+#
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # MySQL Database
+  # ==========================================================================
+  mysql:
+    image: mysql:8.0
+    container_name: urlshortener-mysql-dev
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: url_shortener
+      MYSQL_USER: urluser
+      MYSQL_PASSWORD: urlpassword
+
+    ports:
+      - "3306:3306"
+
+    volumes:
+      - mysql_data_dev:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    networks:
+      - url-shortener-network
+
+  # ==========================================================================
+  # Backend API Server (Development)
+  # ==========================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: development
+    container_name: urlshortener-backend-dev
+    restart: unless-stopped
+
+    environment:
+      PORT: 8000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: urluser
+      DB_PASSWORD: urlpassword
+      DB_NAME: url_shortener
+      ALLOWED_ORIGINS: http://localhost:5173,http://localhost:4173,http://localhost:3000
+      LOG_REQUESTS: "true"
+      DENO_ENV: development
+
+    ports:
+      - "8000:8000"
+      - "9229:9229"  # Debugger port
+
+    volumes:
+      # Mount source code for hot reload
+      - ./backend:/app/backend:ro
+      - ./deno.json:/app/deno.json:ro
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    networks:
+      - url-shortener-network
+
+  # ==========================================================================
+  # Frontend Development Server
+  # ==========================================================================
+  frontend:
+    image: denoland/deno:1.45.5
+    container_name: urlshortener-frontend-dev
+    restart: unless-stopped
+    working_dir: /app
+    command: deno task dev
+
+    environment:
+      VITE_API_URL: http://localhost:8000
+
+    ports:
+      - "5173:5173"
+
+    volumes:
+      # Mount source code for hot reload
+      - ./frontend:/app:cached
+
+    networks:
+      - url-shortener-network
+
+  # ==========================================================================
+  # Adminer - Database Management UI
+  # ==========================================================================
+  adminer:
+    image: adminer:latest
+    container_name: urlshortener-adminer-dev
+    restart: unless-stopped
+
+    ports:
+      - "8081:8080"
+
+    networks:
+      - url-shortener-network
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql
+
+networks:
+  url-shortener-network:
+    driver: bridge
+    name: urlshortener-network-dev
+
+volumes:
+  mysql_data_dev:
+    driver: local
+    name: urlshortener-mysql-data-dev

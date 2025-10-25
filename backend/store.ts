@@ -256,6 +256,10 @@ export class InMemoryURLRepository implements URLRepository {
     return this.urlsByShortCode.has(shortCode);
   }
 
+  /**
+   * Returns every URL owned by a specific user, preserving order of insertion.
+   * Primarily used by dashboard views to list the caller's links.
+   */
   async getAllByUser(userId: string): Promise<ShortenedURL[]> {
     const results: ShortenedURL[] = [];
 
@@ -268,6 +272,12 @@ export class InMemoryURLRepository implements URLRepository {
     return results;
   }
 
+  /**
+   * Materializes the many-to-many relationship for a given category by scanning
+   * the category lookup map. This is O(n) in the number of links owned by the
+  * user, which is acceptable for the in-memory fallback but should be replaced
+  * with a join when backed by SQL.
+   */
   async getURLsByCategory(categoryId: string, userId: string): Promise<ShortenedURL[]> {
     const results: ShortenedURL[] = [];
 
@@ -283,12 +293,20 @@ export class InMemoryURLRepository implements URLRepository {
     return results;
   }
 
+  /**
+   * Adds one or more category IDs to the URL's adjacency set. Duplicate IDs are
+   * automatically coalesced through the Set to keep the array unique.
+   */
   async addCategoriesToURL(urlId: string, categoryIds: string[]): Promise<void> {
     const existing = this.urlCategories.get(urlId) || [];
     const updated = new Set([...existing, ...categoryIds]);
     this.urlCategories.set(urlId, Array.from(updated));
   }
 
+  /**
+   * Removes all provided category IDs from the URL's adjacency list while
+   * keeping unrelated associations intact.
+   */
   async removeCategoriesFromURL(urlId: string, categoryIds: string[]): Promise<void> {
     const existing = this.urlCategories.get(urlId) || [];
     const toRemove = new Set(categoryIds);
@@ -296,6 +314,10 @@ export class InMemoryURLRepository implements URLRepository {
     this.urlCategories.set(urlId, updated);
   }
 
+  /**
+   * Convenience accessor used by the MySQL adapter to merge category
+   * membership between stores when both implementations are live.
+   */
   getCategoryIdsForURL(urlId: string): string[] {
     return this.urlCategories.get(urlId) || [];
   }
@@ -338,6 +360,10 @@ export class InMemoryCategoryRepository implements CategoryRepository {
   private categoriesById: Map<string, import("./types.ts").Category> = new Map();
   private categoriesByUser: Map<string, Set<string>> = new Map();
 
+  /**
+   * Persists a category in memory while enforcing the unique-name-per-user
+   * invariant that the API relies on for quick lookups.
+   */
   async create(category: import("./types.ts").Category): Promise<import("./types.ts").Category> {
     // Check for duplicate name for this user
     const existing = await this.findByName(category.userId, category.name);
@@ -360,6 +386,10 @@ export class InMemoryCategoryRepository implements CategoryRepository {
     return category ? { ...category } : null;
   }
 
+  /**
+   * Case-insensitive name lookup scoped to a single user. This powers the
+   * validation logic that prevents duplicate category names for the same owner.
+   */
   async findByName(userId: string, name: string): Promise<import("./types.ts").Category | null> {
     const userCategoryIds = this.categoriesByUser.get(userId) || new Set();
 
@@ -373,6 +403,10 @@ export class InMemoryCategoryRepository implements CategoryRepository {
     return null;
   }
 
+  /**
+   * Replaces the stored category with the provided payload after re-validating
+   * the name uniqueness constraint. Returns a defensive copy for safety.
+   */
   async update(id: string, category: import("./types.ts").Category): Promise<import("./types.ts").Category> {
     const existing = this.categoriesById.get(id);
 
@@ -491,6 +525,10 @@ export class InMemoryUserRepository implements UserRepository {
   private usersById: Map<string, User> = new Map();
   private usersByEmail: Map<string, string> = new Map();
 
+  /**
+   * Persists the full user record and records a lowercase email index so we
+   * can enforce uniqueness and provide constant-time lookups during login.
+   */
   async create(user: User): Promise<User> {
     if (this.usersByEmail.has(user.email.toLowerCase())) {
       throw new Error("Email already in use");
@@ -501,6 +539,10 @@ export class InMemoryUserRepository implements UserRepository {
     return { ...user };
   }
 
+  /**
+   * Normalizes the email to lowercase, looks up the user ID via the secondary
+   * index, and returns a defensive copy if present. Used by authentication.
+   */
   async findByEmail(email: string): Promise<User | null> {
     const id = this.usersByEmail.get(email.toLowerCase());
     if (!id) {
@@ -510,6 +552,10 @@ export class InMemoryUserRepository implements UserRepository {
     return user ? { ...user } : null;
   }
 
+  /**
+   * Fetches a user by primary key. Primarily used by auth middleware when
+   * verifying active sessions.
+   */
   async findById(id: string): Promise<User | null> {
     const user = this.usersById.get(id);
     return user ? { ...user } : null;
