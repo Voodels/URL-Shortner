@@ -54,7 +54,7 @@ cd URLSHORTNER
 
 Start both backend and frontend:
 ```bash
-./start.sh
+./scripts/start.sh
 ```
 
 Or start them separately:
@@ -67,6 +67,19 @@ deno task dev:backend
 Frontend (runs on http://localhost:5173):
 ```bash
 deno task dev:frontend
+```
+
+### Docker Deployment
+
+Start all services with Docker:
+```bash
+cd docker
+docker-compose up -d
+```
+
+Or use the helper script:
+```bash
+./scripts/start-all.sh
 ```
 
 ### Configuration
@@ -83,13 +96,13 @@ VITE_API_URL=http://localhost:8000
 
 ```
 URLSHORTNER/
-├── backend/
-│   ├── server.ts          # HTTP server and middleware
-│   ├── routes.ts          # API route handlers
-│   ├── store.ts           # In-memory repository
-│   ├── mysql-store.ts     # MySQL repository implementation
-│   └── types.ts           # TypeScript types
-├── frontend/
+├── backend/               # Backend API server
+│   ├── server.ts         # HTTP server and middleware
+│   ├── routes.ts         # API route handlers
+│   ├── store.ts          # In-memory repository
+│   ├── mysql-store.ts    # MySQL repository implementation
+│   └── types.ts          # TypeScript types
+├── frontend/              # React frontend
 │   ├── src/
 │   │   ├── api.ts
 │   │   ├── App.tsx
@@ -98,7 +111,29 @@ URLSHORTNER/
 │   │   └── components/
 │   ├── vite.config.ts
 │   └── tailwind.config.js
-└── start.sh
+├── docker/                # Docker configuration
+│   ├── Dockerfile.backend
+│   ├── Dockerfile.frontend
+│   ├── docker-compose.yml
+│   ├── docker-compose.dev.yml
+│   ├── docker-compose.full.yml
+│   └── nginx.conf
+├── deployment/            # Deployment configurations
+│   └── k8s/              # Kubernetes manifests
+├── database/              # Database schemas and migrations
+├── monitoring/            # Monitoring setup (Prometheus, Grafana)
+├── scripts/               # Utility scripts
+│   ├── start.sh          # Start dev servers
+│   ├── start-all.sh      # Start all services with Docker
+│   ├── stop-all.sh       # Stop all services
+│   ├── deploy.sh         # Deploy to production
+│   └── backup.sh         # Backup database
+├── docs/                  # Documentation
+│   ├── API.md
+│   ├── ARCHITECTURE.md
+│   ├── DEPLOYMENT.md
+│   └── TESTING_GUIDE.md
+└── README.md
 ```
 
 ## Tech Stack
