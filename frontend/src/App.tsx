@@ -642,7 +642,7 @@ export default function App() {
           <aside>
             <div className="flex items-center gap-3 text-lg font-semibold">
               <span className="text-3xl">🛠️</span>
-              <span>Crafted with Deno, React, Tailwind, and DaisyUI</span>
+              <span>Crafted with Love by Vighnesh </span>
             </div>
             <p className="text-base-content/70 max-w-xl">
               Built for creators who love delightful details. Open source, production-ready, and tuned for rapid experimentation.
