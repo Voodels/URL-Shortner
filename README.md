@@ -2,6 +2,17 @@
 
 A URL shortening service built with Deno, TypeScript, React, and DaisyUI.
 
+## Demo
+
+### Login Page
+![Login Page](image.png)
+
+### Dashboard
+![Dashboard](image-1.png)
+
+### URL Management
+![URL Management](image-2.png)
+
 ## Features
 
 - User authentication (register/login)
