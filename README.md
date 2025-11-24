@@ -156,20 +156,64 @@ Visit:
 
 ## 🚢 Deployment
 
-### Backend Deployment (Deno Deploy / Any Deno host)
+### 🎯 Backend on Render.com (Recommended)
 
+**Option 1: Using Blueprint (Easiest)**
+1. Push `render.yaml` to your repo
+2. In Render Dashboard: **New +** → **Blueprint**
+3. Connect your GitHub repo (Voodels/URL-Shortner)
+4. Render auto-detects `render.yaml`
+5. Set secret environment variables:
+   - `JWT_SECRET=hKj9mP3vL8qN2wR5tY6uI1oP4sA7dF0gH3jK6lM9nB2cV5xZ8`
+   - `DB_HOST=ep-royal-mode-adx7mc1o-pooler.c-2.us-east-1.aws.neon.tech`
+   - `DB_USER=neondb_owner`
+   - `DB_PASSWORD=npg_GTSCJ9ApnEd1`
+6. Click **Apply** → Backend deploys automatically!
+
+**Option 2: Manual Web Service (What you're doing now)**
+1. **Language**: Select **Docker**
+2. **Dockerfile Path**: `docker/Dockerfile.backend`
+3. **Docker Context**: `./` (root directory)
+4. **Root Directory**: `./backend`
+5. **Build Command**: Leave empty (Docker handles it)
+6. **Start Command**: Leave empty (Dockerfile has CMD)
+7. **Environment Variables**: Copy all from `.env` file
+8. **Instance Type**: Free (for testing) or Starter ($7/month)
+9. Click **Deploy web service**
+
+**After Deployment:**
 ```bash
-# Ensure environment variables are set on your platform
-# Deploy backend with:
-deno run --allow-net --allow-env --allow-read backend/server.ts
+# Test your backend
+curl https://url-shortner.onrender.com/health
+
+# Should return: {"status":"healthy","timestamp":"...","uptime":...}
 ```
 
-### Frontend Deployment (Vercel / Netlify / Cloudflare Pages)
+⚠️ **Important:** Update `ALLOWED_ORIGINS` environment variable to include your Render URL!
+```
+ALLOWED_ORIGINS=http://localhost:5173,https://url-shortner.onrender.com
+```
+
+### 🌐 Frontend on Vercel (Recommended)
+
+1. Go to https://vercel.com/new
+2. Import your GitHub repo (Voodels/URL-Shortner)
+3. Configure:
+   - **Framework Preset**: Vite
+   - **Root Directory**: `frontend`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+4. Add environment variable:
+   - `VITE_API_URL=https://url-shortner.onrender.com`
+5. Deploy!
+
+### Alternative: Frontend on Netlify
 
 ```bash
 cd frontend
 npm run build
-# Deploy the dist/ folder
+# Drag and drop dist/ folder to Netlify
+# Or connect GitHub for auto-deploy
 ```
 
 ## 📝 Environment Variables Reference

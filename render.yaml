@@ -1,0 +1,87 @@
+# ============================================================================
+# Render Blueprint - URL Shortener Backend
+# ============================================================================
+# This file defines infrastructure as code for Render.com deployment
+#
+# Deploy: Click "New +" → "Blueprint" → Connect to this repo
+# Or manually use the Web UI with these settings
+# ============================================================================
+
+services:
+  # Backend API Service
+  - type: web
+    name: url-shortener-backend
+    env: docker
+    dockerfilePath: ./docker/Dockerfile.backend
+    dockerContext: ./
+    region: oregon
+    plan: free  # Change to 'starter' for production ($7/month)
+
+    # Root directory for commands
+    rootDir: ./
+
+    # Health check endpoint
+    healthCheckPath: /health
+
+    # Auto-deploy on push to main
+    autoDeploy: true
+    branch: main
+
+    # Environment Variables
+    envVars:
+      - key: PORT
+        value: 8000
+
+      - key: JWT_SECRET
+        sync: false  # Secret - set manually in dashboard
+
+      - key: ALLOWED_ORIGINS
+        value: http://localhost:5173,https://url-shortener-backend.onrender.com
+
+      - key: LOG_REQUESTS
+        value: true
+
+      - key: DB_TYPE
+        value: postgres
+
+      - key: DB_HOST
+        sync: false  # Secret - set manually in dashboard
+
+      - key: DB_PORT
+        value: 5432
+
+      - key: DB_USER
+        sync: false  # Secret - set manually in dashboard
+
+      - key: DB_PASSWORD
+        sync: false  # Secret - set manually in dashboard
+
+      - key: DB_NAME
+        value: neondb
+
+      - key: DB_TLS
+        value: true
+
+# ============================================================================
+# Deployment Instructions:
+# ============================================================================
+#
+# METHOD 1: Blueprint (Recommended)
+# ---------------------------------
+# 1. Push this file to your repo
+# 2. In Render dashboard: New + → Blueprint
+# 3. Connect to your GitHub repo
+# 4. Set secret environment variables in dashboard
+# 5. Deploy!
+#
+# METHOD 2: Manual Web Service
+# -----------------------------
+# Use the settings above in the Web UI form
+#
+# After Deployment:
+# -----------------
+# 1. Note your service URL (e.g., https://url-shortener-backend.onrender.com)
+# 2. Update ALLOWED_ORIGINS to include this URL
+# 3. Test: curl https://your-url.onrender.com/health
+#
+# ============================================================================
