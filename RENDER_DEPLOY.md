@@ -1,5 +1,12 @@
 # 🚀 Render Deployment Checklist
 
+## 🚨 MOST IMPORTANT: Use Docker Runtime!
+
+**❌ DO NOT use Node.js runtime - it doesn't have Deno!**
+**✅ MUST use Docker runtime - it includes Deno in the container!**
+
+---
+
 ## ✅ What You Need to Fill in Render Form
 
 ### Basic Configuration
@@ -11,11 +18,13 @@
 
 ### ⚠️ CRITICAL CHANGES
 
-#### 1. Language Setting
+#### 1. Runtime/Language Setting (MOST IMPORTANT!)
 ```
-Current: Node ❌
-Change to: Docker ✅
+❌ WRONG: Node.js (will fail with "deno: command not found")
+✅ CORRECT: Docker (has Deno installed)
 ```
+
+**This is the #1 reason for deployment failures!**
 
 #### 2. Docker Configuration
 ```
