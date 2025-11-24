@@ -16,6 +16,12 @@ import {
     MySQLURLRepository,
     MySQLUserRepository,
 } from "./mysql-store.ts";
+import {
+    createPostgreSQLRepositories,
+    PostgreSQLCategoryRepository,
+    PostgreSQLURLRepository,
+    PostgreSQLUserRepository,
+} from "./postgres-store.ts";
 import type { CategoryRepository, URLRepository, UserRepository } from "./store.ts";
 import {
     categoryRepository as inMemoryCategoryRepository,
@@ -29,7 +35,7 @@ const denoRuntime = (globalThis as { Deno?: any }).Deno;
  * Database configuration
  */
 export interface DBConfig {
-  type: "memory" | "mysql";
+  type: "memory" | "mysql" | "postgres";
   mysql?: {
     hostname: string;
     port: number;
@@ -37,6 +43,14 @@ export interface DBConfig {
     password: string;
     database: string;
     poolSize?: number;
+  };
+  postgres?: {
+    hostname: string;
+    port: number;
+    username: string;
+    password: string;
+    database: string;
+    tls?: boolean;
   };
 }
 
@@ -48,7 +62,7 @@ export function getDatabaseConfig(): DBConfig {
     throw new Error("Deno runtime is required to load database configuration");
   }
 
-  const dbType = (denoRuntime.env.get("DB_TYPE") || "memory") as "memory" | "mysql";
+  const dbType = (denoRuntime.env.get("DB_TYPE") || "memory") as "memory" | "mysql" | "postgres";
 
   if (dbType === "mysql") {
     return {
@@ -60,6 +74,20 @@ export function getDatabaseConfig(): DBConfig {
         password: denoRuntime.env.get("DB_PASSWORD") || "",
         database: denoRuntime.env.get("DB_NAME") || "url_shortener",
         poolSize: parseInt(denoRuntime.env.get("DB_POOL_SIZE") || "10"),
+      },
+    };
+  }
+
+  if (dbType === "postgres") {
+    return {
+      type: "postgres",
+      postgres: {
+        hostname: denoRuntime.env.get("DB_HOST") || "localhost",
+        port: parseInt(denoRuntime.env.get("DB_PORT") || "5432"),
+        username: denoRuntime.env.get("DB_USER") || "postgres",
+        password: denoRuntime.env.get("DB_PASSWORD") || "",
+        database: denoRuntime.env.get("DB_NAME") || "url_shortener",
+        tls: denoRuntime.env.get("DB_TLS") !== "false",
       },
     };
   }
@@ -76,6 +104,9 @@ let categoryRepositoryInstance: CategoryRepository | null = null;
 let mysqlInstance: MySQLURLRepository | null = null;
 let mysqlUserInstance: MySQLUserRepository | null = null;
 let mysqlCategoryInstance: MySQLCategoryRepository | null = null;
+let postgresInstance: PostgreSQLURLRepository | null = null;
+let postgresUserInstance: PostgreSQLUserRepository | null = null;
+let postgresCategoryInstance: PostgreSQLCategoryRepository | null = null;
 
 /**
  * Initialize and return the URL repository based on configuration
@@ -112,6 +143,24 @@ export async function initializeRepository(): Promise<URLRepository> {
 
     const { hostname, port, database } = mysqlConfig;
     console.log(`✅ MySQL repository initialized (host=${hostname}:${port}, db=${database})`);
+  } else if (config.type === "postgres") {
+    if (!config.postgres) {
+      throw new Error("PostgreSQL configuration is missing");
+    }
+
+    // Create and connect to PostgreSQL
+    const postgresConfig = config.postgres;
+    const { urlRepository, userRepository, categoryRepository } = await createPostgreSQLRepositories(postgresConfig);
+
+    postgresInstance = urlRepository;
+    postgresUserInstance = userRepository;
+    postgresCategoryInstance = categoryRepository;
+    repositoryInstance = urlRepository;
+    userRepositoryInstance = userRepository;
+    categoryRepositoryInstance = categoryRepository;
+
+    const { hostname, port, database } = postgresConfig;
+    console.log(`✅ PostgreSQL repository initialized (host=${hostname}:${port}, db=${database})`);
   } else {
     // Use in-memory repository
     repositoryInstance = inMemoryRepository;
@@ -167,6 +216,16 @@ export async function closeDatabase(): Promise<void> {
   }
   if (mysqlCategoryInstance) {
     mysqlCategoryInstance = null;
+  }
+  if (postgresInstance) {
+    await postgresInstance.disconnect();
+    postgresInstance = null;
+  }
+  if (postgresUserInstance) {
+    postgresUserInstance = null;
+  }
+  if (postgresCategoryInstance) {
+    postgresCategoryInstance = null;
   }
   repositoryInstance = null;
   userRepositoryInstance = null;

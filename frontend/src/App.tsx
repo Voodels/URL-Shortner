@@ -329,12 +329,12 @@ export default function App() {
               <div className="w-full max-w-xl rounded-3xl bg-white/10 p-6 text-left shadow-2xl backdrop-blur-xl md:bg-white/5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <span className="badge badge-success badge-outline">Case study</span>
+                    <span className="badge badge-success badge-outline">Goal</span>
                     <p className="mt-2 text-sm text-white/80">
-                      “We saw 2× more clicks the week we switched to LinkStudio short links.”
+                      “To help people create and share meaningful links and categorize them effectively.”
                     </p>
                   </div>
-                  <div className="text-xs text-white/70">@AuroraCollective</div>
+                  <div className="text-xs text-white/70">@Voodels</div>
                 </div>
               </div>
             </section>
