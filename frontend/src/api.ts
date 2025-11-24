@@ -505,8 +505,13 @@ const envMeta = import.meta as ImportMeta & {
   env?: Record<string, string>;
 };
 
+// Use Render backend as default for production
+const defaultAPIURL = envMeta.env?.MODE === 'production'
+  ? 'https://url-shortner-1-pzxs.onrender.com'
+  : 'http://localhost:8000';
+
 export const api = new URLShortenerAPI(
-  envMeta.env?.VITE_API_URL || "http://localhost:8000"
+  envMeta.env?.VITE_API_URL || defaultAPIURL
 );
 
 // Export for testing with different configuration
