@@ -140,14 +140,14 @@ export class URLShortenerAPI {
   /**
    * Initialize API client with base URL
    *
-   * CONFIGURATION: Base URL from environment or default to localhost
-   * PRODUCTION: Should use environment variable
+   * CONFIGURATION: Base URL from environment or Render backend
+   * PRODUCTION: Always uses Render backend URL
    *
    * @param baseURL - Base URL of the API
    */
   constructor(baseURL?: string) {
-    // Use provided URL or default to localhost backend
-    this.baseURL = baseURL || "http://localhost:8000";
+    // Use provided URL or default to Render backend
+    this.baseURL = baseURL || "https://url-shortner-1-pzxs.onrender.com";
   }
 
   /**
@@ -505,13 +505,9 @@ const envMeta = import.meta as ImportMeta & {
   env?: Record<string, string>;
 };
 
-// Use Render backend as default for production
-const defaultAPIURL = envMeta.env?.MODE === 'production'
-  ? 'https://url-shortner-1-pzxs.onrender.com'
-  : 'http://localhost:8000';
-
+// Always use Render backend for production deployment
 export const api = new URLShortenerAPI(
-  envMeta.env?.VITE_API_URL || defaultAPIURL
+  envMeta.env?.VITE_API_URL || 'https://url-shortner-1-pzxs.onrender.com'
 );
 
 // Export for testing with different configuration
