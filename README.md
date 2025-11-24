@@ -1,91 +1,134 @@
 # 🔗 URL Shortener
 
-A modern, full-stack URL shortening service with user authentication, categories, and analytics. Built with Deno, React, and PostgreSQL (Neon).
+A modern URL shortening service with user accounts, custom categories, and analytics. Built with Deno, React, and PostgreSQL.
 
-## ✨ Features
+## 🌐 Live Demo
 
-- 🔐 **User Authentication** - Register, login with JWT tokens
-- 📊 **Analytics** - Track access counts and view statistics
-- 🏷️ **Categories** - Organize URLs into custom categories
-- 🎨 **Modern UI** - Beautiful, responsive interface with dark mode
-- ⚡ **Fast & Scalable** - Built on Deno and Neon PostgreSQL
-- 🔒 **Secure** - CORS protection, input validation, password hashing
+- **Frontend**: [url-shortner-self-mu.vercel.app](https://url-shortner-self-mu.vercel.app)
+- **Backend API**: [url-shortner-1-pzxs.onrender.com](https://url-shortner-1-pzxs.onrender.com)
+- **Health Check**: [url-shortner-1-pzxs.onrender.com/health](https://url-shortner-1-pzxs.onrender.com/health)
 
-## 🚀 Quick Start
+## ✨ What It Does
 
-### Prerequisites
+- 🔐 **User Accounts** - Sign up and manage your own URLs
+- 📊 **Analytics** - See how many times your links get clicked
+- 🏷️ **Categories** - Group your URLs however you want
+- 🎨 **Clean Interface** - Dark mode support, works on mobile
+- ⚡ **Actually Fast** - Deno backend + Neon PostgreSQL
+- 🔒 **Security Built-in** - JWT auth, CORS, password hashing
 
-- [Deno](https://deno.land/) 1.40 or higher
-- [Node.js](https://nodejs.org/) 18+ and npm
-- [Neon PostgreSQL](https://neon.tech/) account (free tier available)
+## 🏗️ Architecture
 
-### 1. Clone and Setup
+```mermaid
+graph TB
+    subgraph "Frontend - Vercel"
+        A[React + Vite]
+        B[TailwindCSS]
+        A --> B
+    end
+
+    subgraph "Backend - Render"
+        C[Deno Server]
+        D[JWT Auth]
+        E[CORS Handler]
+        C --> D
+        C --> E
+    end
+
+    subgraph "Database - Neon"
+        F[(PostgreSQL)]
+        G[Users Table]
+        H[URLs Table]
+        I[Categories Table]
+        F --> G
+        F --> H
+        F --> I
+    end
+
+    A -->|HTTPS| C
+    C -->|SQL Queries| F
+
+    style A fill:#61dafb
+    style C fill:#000
+    style F fill:#336791
+```
+
+**How it works:**
+1. You visit the site and create an account
+2. Frontend sends your request to the Deno backend on Render
+3. Backend validates everything and saves to PostgreSQL on Neon
+4. You get a short link like `url-shortner-1-pzxs.onrender.com/abc123`
+5. Anyone who clicks that link gets redirected to your original URL
+6. We count every click so you can see your stats
+
+## 🚀 Running Locally
+
+### What You Need
+
+- [Deno](https://deno.land/) - The backend runtime
+- [Node.js](https://nodejs.org/) - For frontend build tools
+- [Neon account](https://neon.tech/) - Free PostgreSQL database
+
+### Setup Steps
 
 ```bash
-# Clone the repository
+# Get the code
 git clone https://github.com/Voodels/URL-Shortner.git
 cd URL-Shortner
 
-# Copy environment file
+# Create your env file
 cp .env.example .env
 ```
 
-### 2. Configure Environment
-
-Edit `.env` with your Neon PostgreSQL credentials:
+Now edit `.env` with your database info:
 
 ```env
-# Application
 PORT=8000
-JWT_SECRET=your_secret_key_here  # Generate with: openssl rand -base64 32
+JWT_SECRET=your_secret_here  # openssl rand -base64 32
 ALLOWED_ORIGINS=http://localhost:5173
-LOG_REQUESTS=true
 
-# Database - Get from https://console.neon.tech
 DB_TYPE=postgres
-DB_HOST=your-project.neon.tech
+DB_HOST=your-project.neon.tech  # from neon.tech dashboard
 DB_PORT=5432
-DB_USER=your_username
+DB_USER=neondb_owner
 DB_PASSWORD=your_password
 DB_NAME=neondb
 DB_TLS=true
 ```
 
-### 3. Initialize Database
-
+Setup the database:
 ```bash
-# Apply schema to your Neon database
-PGPASSWORD='your_password' psql -h your-project.neon.tech -U your_username -d neondb -p 5432 -f database/schema_postgres.sql
+PGPASSWORD='your_password' psql \
+  -h your-project.neon.tech \
+  -U neondb_owner \
+  -d neondb \
+  -f database/schema_postgres.sql
 ```
 
-### 4. Install Frontend Dependencies
-
+Install frontend stuff:
 ```bash
 cd frontend
 npm install
 cd ..
 ```
 
-### 5. Start Development Servers
-
+Start everything:
 ```bash
-# Option 1: Use the dev script
 ./dev.sh
+```
 
-# Option 2: Start manually
-# Terminal 1 - Backend
+Or manually:
+```bash
+# Terminal 1
 cd backend
 deno run --allow-net --allow-env --allow-read server.ts
 
-# Terminal 2 - Frontend
+# Terminal 2
 cd frontend
 npm run dev
 ```
 
-Visit:
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
-- Health Check: http://localhost:8000/health
+Open http://localhost:5173 and you're good to go!
 
 ## 📁 Project Structure
 
@@ -140,80 +183,54 @@ Visit:
 - `POST /shorten/:shortCode/categories` - Add categories to URL
 - `DELETE /shorten/:shortCode/categories` - Remove categories from URL
 
-## 🏗️ Tech Stack
+## 🛠️ Built With
 
-### Backend
-- **Runtime**: Deno 1.40+
-- **Database**: PostgreSQL (Neon)
-- **Auth**: JWT tokens with bcrypt
-- **CORS**: Configurable origin support
+**Backend**
+- Deno - Modern JavaScript/TypeScript runtime
+- PostgreSQL - Database (hosted on Neon)
+- JWT + bcrypt - Authentication
 
-### Frontend
-- **Framework**: React 18
-- **Build Tool**: Vite
-- **Styling**: TailwindCSS + DaisyUI
-- **State**: React Context API
+**Frontend**
+- React 18 - UI framework
+- Vite - Build tool (crazy fast)
+- TailwindCSS + DaisyUI - Styling
 
-## 🚢 Deployment
+**Hosting**
+- Render - Backend deployment
+- Vercel - Frontend deployment
+- Neon - PostgreSQL database
 
-### 🎯 Backend on Render.com (Recommended)
+## � Deploying Your Own
 
-**Option 1: Using Blueprint (Easiest)**
-1. Push `render.yaml` to your repo
-2. In Render Dashboard: **New +** → **Blueprint**
-3. Connect your GitHub repo (Voodels/URL-Shortner)
-4. Render auto-detects `render.yaml`
-5. Set secret environment variables:
-   - `JWT_SECRET=hKj9mP3vL8qN2wR5tY6uI1oP4sA7dF0gH3jK6lM9nB2cV5xZ8`
-   - `DB_HOST=ep-royal-mode-adx7mc1o-pooler.c-2.us-east-1.aws.neon.tech`
-   - `DB_USER=neondb_owner`
-   - `DB_PASSWORD=npg_GTSCJ9ApnEd1`
-6. Click **Apply** → Backend deploys automatically!
+### Backend on Render
 
-**Option 2: Manual Web Service (What you're doing now)**
-1. **Language**: Select **Docker**
-2. **Dockerfile Path**: `docker/Dockerfile.backend`
-3. **Docker Context**: `./` (root directory)
-4. **Root Directory**: `./backend`
-5. **Build Command**: Leave empty (Docker handles it)
-6. **Start Command**: Leave empty (Dockerfile has CMD)
-7. **Environment Variables**: Copy all from `.env` file
-8. **Instance Type**: Free (for testing) or Starter ($7/month)
-9. Click **Deploy web service**
+1. Fork this repo
+2. Create account on [Render](https://render.com)
+3. New Web Service → Connect your fork
+4. Settings:
+   - **Environment**: Docker
+   - **Dockerfile Path**: `docker/Dockerfile.backend`
+   - **Docker Context**: `./`
+5. Add environment variables from your `.env`
+6. Deploy!
 
-**After Deployment:**
-```bash
-# Test your backend
-curl https://url-shortner.onrender.com/health
+Test it: `curl https://your-app.onrender.com/health`
 
-# Should return: {"status":"healthy","timestamp":"...","uptime":...}
-```
+### Frontend on Vercel
 
-⚠️ **Important:** Update `ALLOWED_ORIGINS` environment variable to include your Render URL!
-```
-ALLOWED_ORIGINS=http://localhost:5173,https://url-shortner.onrender.com
-```
-
-### 🌐 Frontend on Vercel (Recommended)
-
-1. Go to https://vercel.com/new
-2. Import your GitHub repo (Voodels/URL-Shortner)
-3. Configure:
-   - **Framework Preset**: Vite
+1. Create account on [Vercel](https://vercel.com)
+2. Import your fork
+3. Settings:
+   - **Framework**: Vite
    - **Root Directory**: `frontend`
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
-4. Add environment variable:
-   - `VITE_API_URL=https://url-shortner.onrender.com`
+4. Add env var: `VITE_API_URL=https://your-backend.onrender.com`
 5. Deploy!
 
-### Alternative: Frontend on Netlify
-
-```bash
-cd frontend
-npm run build
-# Drag and drop dist/ folder to Netlify
-# Or connect GitHub for auto-deploy
+**Important:** Update `ALLOWED_ORIGINS` on Render to include your Vercel URL:
+```
+ALLOWED_ORIGINS=https://your-backend.onrender.com,https://your-frontend.vercel.app
 ```
 
 ## 📝 Environment Variables Reference
@@ -232,32 +249,30 @@ npm run build
 | `DB_NAME` | Database name | `neondb` |
 | `DB_TLS` | Enable TLS connection | `true` (recommended for Neon) |
 
-## 🔐 Security Notes
+## � Security Stuff
 
-- Always use strong, unique `JWT_SECRET` in production
-- Never commit `.env` to version control
-- Use HTTPS in production
-- Set `ALLOWED_ORIGINS` to your actual domain(s)
-- Enable `DB_TLS=true` for secure database connections
+- Generate a random `JWT_SECRET` (don't use the example!)
+- Never commit `.env` files
+- Always use HTTPS in production
+- Set `ALLOWED_ORIGINS` to your actual domains only
+- Database uses TLS encryption
 
-## 🤝 Contributing
+## 🤝 Want to Contribute?
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+Found a bug? Have an idea? PRs are welcome!
+
+1. Fork it
+2. Create your branch (`git checkout -b cool-feature`)
+3. Commit changes (`git commit -m 'Added something cool'`)
+4. Push (`git push origin cool-feature`)
 5. Open a Pull Request
 
 ## 📄 License
 
-This project is open source and available under the MIT License.
-
-## 🙏 Acknowledgments
-
-- Built with [Deno](https://deno.land/)
-- Database hosted on [Neon](https://neon.tech/)
-- UI components from [DaisyUI](https://daisyui.com/)
+MIT License - do whatever you want with it
 
 ---
 
-Made with ❤️ by [Voodels](https://github.com/Voodels)
+**Made by [@Voodels](https://github.com/Voodels)**
+
+Questions? Open an issue or check out the [live demo](https://url-shortner-self-mu.vercel.app)!
