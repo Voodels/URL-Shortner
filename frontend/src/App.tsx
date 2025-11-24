@@ -13,7 +13,7 @@ import { AnimatedBackground } from "./components/AnimatedBackground";
 import { CategoryManager } from "./components/CategoryManager";
 import { CategoryTabs } from "./components/CategoryTabs";
 import { ThemeToggle } from "./components/ThemeToggle";
-import { URLCard } from "./components/URLCardNew";
+import { URLCard } from "./components/URLCard";
 import { URLForm } from "./components/URLForm";
 import { useTheme } from "./ThemeContext";
 
